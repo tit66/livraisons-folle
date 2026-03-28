@@ -1,0 +1,26 @@
+# Handle Edits
+if not edited_df.equals(df_orders) and len(edited_df) == len(df_orders):
+    changes_made = False
+    for idx, row in edited_df.iterrows():
+        orig_row = df_orders.iloc[idx]
+        if row['Date'] != orig_row['Date'] or \
+           row['Créneau'] != orig_row['Créneau'] or \
+           row['Chargement'] != orig_row['Chargement'] or \
+           row['Déchargement'] != orig_row['Déchargement']:
+            order_id = row["id"]
+            # Traitement des champs vides pour la DB
+            loading_pt_val = row['Chargement'] if row['Chargement'] else None
+            unloading_pt_val = row['Déchargement'] if row['Déchargement'] else None
+
+            try:
+                engine = create_engine(DB_URI)
+                with engine.begin() as conn:
+                    conn.execute(text("UPDATE orders SET requested_date = :d, requested_slot = :s, loading_point = :lp, unloading_point = :up WHERE id = :id"), \
+                                 {"d": row['Date'], "s": row['Créneau'], "lp": loading_pt_val, "up": unloading_pt_val, "id": order_id})
+                changes_made = True
+            except Exception as e:
+                st.error(f"Erreur de mise à jour pour le client {row['Client']} : {e}")
+    if changes_made:
+        st.cache_data.clear()
+        st.success("Mise à jour effectuée !")
+        st.rerun()

@@ -1,0 +1,77 @@
+{
+  "name": "Sauvegarde Commandes -> Google Sheets",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "backup-google-sheets",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "e4f5068f-a9cb-4c59-bfbc-85b1a3294cba",
+      "name": "Webhook (Depuis Streamlit)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        460,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date de Livraison": "={{ $json.body.requested_date }}",
+            "Cr\u00e9neau": "={{ $json.body.requested_slot }}",
+            "Prestation": "={{ $json.body.service_type }}",
+            "Volume / Format": "={{ $json.body.container_type }}",
+            "Mat\u00e9riau (Pose)": "={{ $json.body.material }}",
+            "D\u00e9chet (Enl\u00e8vement)": "={{ $json.body.waste_type }}",
+            "Client ID": "={{ $json.body.client_id }}",
+            "Site ID": "={{ $json.body.site_id }}",
+            "Instructions": "={{ $json.body.instructions }}",
+            "Devis demand\u00e9": "={{ $json.body.is_devis }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "787bb755-f761-419b-ab09-7756f7e411b4",
+      "name": "Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        680,
+        340
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook (Depuis Streamlit)": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

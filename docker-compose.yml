@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  streamlit:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+    networks:
+      - default
+      - n8n-local_default
+networks:
+  n8n-local_default:
+    external: true
