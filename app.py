@@ -17,6 +17,128 @@ st.set_page_config(page_title='Livraisons Folles', page_icon='🐙', layout='wid
 DB_URI = 'postgresql://n8n:supersecret@n8n-local_postgres_1:5432/n8n'
 
 # ─────────────────────────────────────────────────────────────────────────────
+# MULTILINGUE - VUE CHAUFFEUR
+# ─────────────────────────────────────────────────────────────────────────────
+LANGS = {
+    "FR": {
+        "my_missions": "Mes missions du jour",
+        "delivered": "✅ LIVRÉ",
+        "report_issue": "❌ Signaler un problème",
+        "send_alert": "🚨 Envoyer l'alerte au bureau",
+        "my_vehicles": "🚚 Mes Véhicules",
+        "no_mission": "Aucune mission pour aujourd'hui.",
+        "assigned_truck": "Camion assigné",
+        "assigned_trailer": "Remorque assignée",
+        "no_vehicle": "Aucun véhicule assigné aujourd'hui.",
+        "issue_type": "Type de problème",
+        "issue_desc": "Explication détaillée",
+        "client": "Client",
+        "address": "Adresse",
+        "product": "Type produit",
+        "waste": "Type de déchet",
+        "quantity": "Quantité",
+        "loading_point": "Lieu de chargement",
+        "unloading_point": "Lieu de déchargement",
+        "slot": "Créneau",
+        "phone": "Téléphone client",
+        "comment": "Commentaire",
+        "container_size": "Taille benne",
+        "connect_as": "Se connecter en tant que :",
+        "open_maps": "🗺️ Ouvrir dans Google Maps",
+    },
+    "EN": {
+        "my_missions": "My missions today",
+        "delivered": "✅ DELIVERED",
+        "report_issue": "❌ Report an issue",
+        "send_alert": "🚨 Send alert to office",
+        "my_vehicles": "🚚 My Vehicles",
+        "no_mission": "No missions for today.",
+        "assigned_truck": "Assigned truck",
+        "assigned_trailer": "Assigned trailer",
+        "no_vehicle": "No vehicle assigned today.",
+        "issue_type": "Issue type",
+        "issue_desc": "Detailed description",
+        "client": "Client",
+        "address": "Address",
+        "product": "Product type",
+        "waste": "Waste type",
+        "quantity": "Quantity",
+        "loading_point": "Loading point",
+        "unloading_point": "Unloading point",
+        "slot": "Time slot",
+        "phone": "Client phone",
+        "comment": "Comments",
+        "container_size": "Skip size",
+        "connect_as": "Connect as:",
+        "open_maps": "🗺️ Open in Google Maps",
+    },
+    "ES": {
+        "my_missions": "Mis misiones de hoy",
+        "delivered": "✅ ENTREGADO",
+        "report_issue": "❌ Reportar un problema",
+        "send_alert": "🚨 Enviar alerta a la oficina",
+        "my_vehicles": "🚚 Mis Vehículos",
+        "no_mission": "Sin misiones para hoy.",
+        "assigned_truck": "Camión asignado",
+        "assigned_trailer": "Remolque asignado",
+        "no_vehicle": "Sin vehículo asignado hoy.",
+        "issue_type": "Tipo de problema",
+        "issue_desc": "Descripción detallada",
+        "client": "Cliente",
+        "address": "Dirección",
+        "product": "Tipo de producto",
+        "waste": "Tipo de residuo",
+        "quantity": "Cantidad",
+        "loading_point": "Punto de carga",
+        "unloading_point": "Punto de descarga",
+        "slot": "Franja horaria",
+        "phone": "Teléfono cliente",
+        "comment": "Comentarios",
+        "container_size": "Tamaño contenedor",
+        "connect_as": "Conectarse como:",
+        "open_maps": "🗺️ Abrir en Google Maps",
+    },
+    "PT": {
+        "my_missions": "Minhas missões de hoje",
+        "delivered": "✅ ENTREGUE",
+        "report_issue": "❌ Reportar um problema",
+        "send_alert": "🚨 Enviar alerta ao escritório",
+        "my_vehicles": "🚚 Meus Veículos",
+        "no_mission": "Sem missões para hoje.",
+        "assigned_truck": "Caminhão atribuído",
+        "assigned_trailer": "Reboque atribuído",
+        "no_vehicle": "Nenhum veículo atribuído hoje.",
+        "issue_type": "Tipo de problema",
+        "issue_desc": "Descrição detalhada",
+        "client": "Cliente",
+        "address": "Endereço",
+        "product": "Tipo de produto",
+        "waste": "Tipo de resíduo",
+        "quantity": "Quantidade",
+        "loading_point": "Ponto de carregamento",
+        "unloading_point": "Ponto de descarga",
+        "slot": "Horário",
+        "phone": "Telefone do cliente",
+        "comment": "Comentários",
+        "container_size": "Tamanho do contêiner",
+        "connect_as": "Conectar como:",
+        "open_maps": "🗺️ Abrir no Google Maps",
+    },
+}
+
+def get_lang(nationality):
+    if not nationality:
+        return LANGS["FR"]
+    n = str(nationality).lower()
+    if any(x in n for x in ["port", "brésil", "bresil", "brasil"]):
+        return LANGS["PT"]
+    if any(x in n for x in ["espagn", "mexic", "argentin", "colombi"]):
+        return LANGS["ES"]
+    if any(x in n for x in ["angl", "brit", "irland", "english", "amér", "amer"]):
+        return LANGS["EN"]
+    return LANGS["FR"]
+
+# ─────────────────────────────────────────────────────────────────────────────
 # INITIALISATION DE LA BASE DE DONNÉES
 # ─────────────────────────────────────────────────────────────────────────────
 @st.cache_resource
@@ -56,6 +178,7 @@ def init_connection():
         """))
         conn.execute(text("ALTER TABLE drivers ADD COLUMN IF NOT EXISTS driver_card_number VARCHAR(100)"))
         conn.execute(text("ALTER TABLE drivers ADD COLUMN IF NOT EXISTS driver_card_expiry DATE"))
+        conn.execute(text("ALTER TABLE drivers ADD COLUMN IF NOT EXISTS nationality VARCHAR(100)"))
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS vehicles (
                 id SERIAL PRIMARY KEY,
@@ -94,11 +217,22 @@ def init_connection():
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS catalog_items (
                 id SERIAL PRIMARY KEY,
-                name VARCHAR(255),
                 category VARCHAR(50),
-                unit VARCHAR(50),
-                price_ht NUMERIC(10,2)
+                name VARCHAR(150),
+                UNIQUE (category, name)
             )
+        """))
+        # Try to add unique constraint if it doesn't exist
+        conn.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'catalog_items_category_name_key'
+                ) THEN
+                    ALTER TABLE catalog_items ADD CONSTRAINT catalog_items_category_name_key UNIQUE (category, name);
+                END IF;
+            EXCEPTION WHEN others THEN NULL;
+            END $$;
         """))
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS skip_inventory (
@@ -129,9 +263,13 @@ def init_connection():
                 driver_id INTEGER REFERENCES drivers(id),
                 vehicle_id INTEGER REFERENCES vehicles(id),
                 trailer_id INTEGER REFERENCES vehicles(id),
-                created_at TIMESTAMP DEFAULT NOW()
+                created_at TIMESTAMP DEFAULT NOW(),
+                loading_point VARCHAR(255),
+                unloading_point TEXT
             )
         """))
+        conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS loading_point VARCHAR(255)"))
+        conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS unloading_point TEXT"))
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS vehicle_issues (
                 id SERIAL PRIMARY KEY,
@@ -153,6 +291,27 @@ def init_connection():
                 is_resolved BOOLEAN DEFAULT false,
                 created_at TIMESTAMP DEFAULT NOW()
             )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS sorting_center_bins (
+                id SERIAL PRIMARY KEY,
+                bin_type VARCHAR(100) UNIQUE NOT NULL,
+                container_size VARCHAR(50) DEFAULT '10m3',
+                status VARCHAR(50) DEFAULT 'ok',
+                notes TEXT DEFAULT ''
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO sorting_center_bins (bin_type, status) VALUES
+                ('Bois', 'ok'), ('Placo', 'ok'), ('Carton', 'ok'), ('Fer', 'ok'), ('DIB', 'ok')
+            ON CONFLICT DO NOTHING
+        """))
+        # Seed default service_type catalog entries
+        conn.execute(text("""
+            INSERT INTO catalog_items (category, name) VALUES
+                ('service_type', 'Livraison de matériaux'),
+                ('service_type', 'Location de benne')
+            ON CONFLICT DO NOTHING
         """))
         conn.commit()
     return engine
@@ -180,6 +339,18 @@ def extract_coords(url):
     if match:
         return float(match.group(1)), float(match.group(2))
     return None, None
+
+def auto_report_orders():
+    """Reporte automatiquement les commandes non traitées au lendemain."""
+    try:
+        run_query("""
+            UPDATE orders
+            SET requested_date = requested_date + INTERVAL '1 day'
+            WHERE requested_date < CURRENT_DATE
+              AND status NOT IN ('done', 'cancelled')
+        """)
+    except Exception:
+        pass
 
 def est_jour_ouvrable(date_obj):
     if date_obj.weekday() >= 5:
@@ -250,6 +421,14 @@ def check_alerts():
         pass
     return alerts
 
+# Créneaux horaires standardisés
+SLOTS = ["Indifférent dans la journée", "8h Premier tour", "8h-10h", "10h-12h", "13h-15h", "15h-17h"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AUTO-REPORT AU DÉMARRAGE
+# ─────────────────────────────────────────────────────────────────────────────
+auto_report_orders()
+
 # ─────────────────────────────────────────────────────────────────────────────
 # SIDEBAR NAVIGATION
 # ─────────────────────────────────────────────────────────────────────────────
@@ -266,6 +445,7 @@ with st.sidebar:
             "👥 Gestion des Chauffeurs",
             "🚚 Gestion de la Flotte",
             "📱 Vue Chauffeur (Mobile)",
+            "♻️ Centre de Tri",
             "⚙️ Paramètres de l'Entreprise",
         ]
     )
@@ -276,17 +456,48 @@ with st.sidebar:
 if navigation == "📊 Tableau de bord - Livraisons":
     st.title("📊 Tableau de bord - Livraisons")
     today = datetime.date.today()
-    date_filtre = st.date_input("Afficher les livraisons du :", value=today)
 
+    # 1a. Métriques en haut
+    try:
+        df_metrics = load_data("""
+            SELECT
+                COUNT(*) as total,
+                COUNT(*) FILTER (WHERE status='done') as done_count,
+                COUNT(*) FILTER (WHERE status='pending') as pending_count,
+                COUNT(*) FILTER (WHERE status IN ('planned','dispatched')) as planned_count
+            FROM orders
+            WHERE requested_date = :d
+        """, {"d": today})
+        df_issues_count = load_data("""
+            SELECT COUNT(*) as cnt FROM order_issues WHERE is_resolved = false
+        """)
+        m = df_metrics.iloc[0] if not df_metrics.empty else None
+        issues_cnt = int(df_issues_count.iloc[0]['cnt']) if not df_issues_count.empty else 0
+
+        col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
+        col_m1.metric("📦 Total du jour", int(m['total']) if m is not None else 0)
+        col_m2.metric("✅ Terminées", int(m['done_count']) if m is not None else 0)
+        col_m3.metric("🕐 En attente", int(m['pending_count']) if m is not None else 0)
+        col_m4.metric("📋 Planifiées", int(m['planned_count']) if m is not None else 0)
+        col_m5.metric("🚨 Problèmes ouverts", issues_cnt)
+    except Exception as e:
+        st.error(f"Erreur métriques : {e}")
+
+    st.markdown("---")
+    date_filtre = st.date_input("Afficher les livraisons du :", value=today, format="DD/MM/YYYY")
+
+    # 1b. Grand tableau modifiable avec expanders
     try:
         df_orders = load_data("""
-            SELECT o.id, c.name as "Client", o.status as "Statut",
-                   o.service_type as "Prestation",
-                   COALESCE(o.material, o.waste_type) as "Détails",
-                   o.requested_slot as "Créneau",
-                   CONCAT(d.first_name, ' ', d.last_name) as "Chauffeur",
-                   v.license_plate as "Véhicule",
-                   s.address as "Adresse"
+            SELECT o.id, c.name as client_name, o.status,
+                   o.service_type, o.material, o.waste_type,
+                   o.quantity_tons, o.requested_date, o.requested_slot,
+                   o.driver_id, o.loading_point, o.unloading_point,
+                   CONCAT(d.first_name, ' ', d.last_name) as chauffeur,
+                   v.license_plate as vehicule,
+                   s.address as adresse,
+                   o.instructions,
+                   o.container_type
             FROM orders o
             LEFT JOIN clients c ON o.client_id = c.id
             LEFT JOIN drivers d ON o.driver_id = d.id
@@ -295,10 +506,127 @@ if navigation == "📊 Tableau de bord - Livraisons":
             WHERE o.requested_date = :d
             ORDER BY o.id
         """, {"d": date_filtre})
+
+        # Récupérer les IDs des commandes avec problème non résolu
+        df_issues_ids = load_data("""
+            SELECT DISTINCT order_id FROM order_issues WHERE is_resolved = false
+        """)
+        issue_order_ids = set(df_issues_ids['order_id'].tolist()) if not df_issues_ids.empty else set()
+
+        # Chauffeurs actifs pour les selectboxes
+        df_drivers_sel = load_data("SELECT id, first_name, last_name FROM drivers WHERE is_active = true ORDER BY first_name")
+        drv_dict = {None: "--- Non assigné ---"}
+        for _, r in df_drivers_sel.iterrows():
+            drv_dict[r['id']] = f"{r['first_name']} {r['last_name']}"
+
+        # Points de chargement / déchargement
+        df_loading_pts = load_data("SELECT name FROM catalog_items WHERE category='loading_point' ORDER BY name")
+        df_unloading_pts = load_data("SELECT name FROM catalog_items WHERE category='unloading_point' ORDER BY name")
+        loading_options = df_loading_pts['name'].tolist() if not df_loading_pts.empty else []
+        unloading_options = df_unloading_pts['name'].tolist() if not df_unloading_pts.empty else []
+
         if df_orders.empty:
             st.info("Aucune livraison pour cette date.")
         else:
-            st.dataframe(df_orders.drop(columns=['id']), use_container_width=True)
+            for _, row in df_orders.iterrows():
+                order_id = row['id']
+                has_issue = order_id in issue_order_ids
+                req_date = row['requested_date']
+                if hasattr(req_date, 'date'):
+                    req_date = req_date.date()
+
+                # Couleur du label
+                if has_issue:
+                    color_badge = "🔴🚨"
+                    color_style = "color: red; font-weight: bold;"
+                elif req_date is not None and req_date < today and row['status'] not in ('done', 'cancelled'):
+                    color_badge = "🟠"
+                    color_style = "color: orange; font-weight: bold;"
+                else:
+                    color_badge = "⬜"
+                    color_style = ""
+
+                details = row['material'] or row['waste_type'] or ""
+                expander_label = (
+                    f"{color_badge} [{row['status'].upper()}] {row['client_name']} — "
+                    f"{row['service_type']} — {details} "
+                    f"({req_date.strftime('%d/%m/%Y') if req_date else '?'} / {row['requested_slot'] or '?'}) "
+                    f"— {row['chauffeur'] or 'Non assigné'}"
+                )
+
+                with st.expander(expander_label):
+                    if has_issue:
+                        st.error("🚨 Cette commande a un problème non résolu !")
+
+                    fc1, fc2 = st.columns(2)
+                    with fc1:
+                        new_date = st.date_input(
+                            "📅 Date souhaitée",
+                            value=req_date if req_date else today,
+                            key=f"date_{order_id}",
+                            format="DD/MM/YYYY"
+                        )
+                        slot_idx = SLOTS.index(row['requested_slot']) if row['requested_slot'] in SLOTS else 0
+                        new_slot = st.selectbox("⏰ Créneau", SLOTS, index=slot_idx, key=f"slot_{order_id}")
+                        new_qty = st.number_input("⚖️ Quantité (tonnes)", value=float(row['quantity_tons'] or 0), min_value=0.0, step=0.5, key=f"qty_{order_id}")
+                    with fc2:
+                        # Material ou waste_type selon service_type
+                        stype = str(row['service_type'] or "").lower()
+                        if "benne" in stype:
+                            new_material = None
+                            new_waste = st.text_input("🗑️ Type de déchet", value=row['waste_type'] or "", key=f"waste_{order_id}")
+                            # Point de déchargement
+                            unload_val = row['unloading_point'] or ""
+                            unload_idx = unloading_options.index(unload_val) if unload_val in unloading_options else 0
+                            if unloading_options:
+                                new_unload = st.selectbox("📍 Point de déchargement", unloading_options, index=unload_idx, key=f"unload_{order_id}")
+                            else:
+                                new_unload = st.text_input("📍 Point de déchargement", value=unload_val, key=f"unload_{order_id}")
+                            new_load = row['loading_point'] or ""
+                        else:
+                            new_waste = None
+                            new_material = st.text_input("📦 Matériau", value=row['material'] or "", key=f"mat_{order_id}")
+                            # Point de chargement
+                            load_val = row['loading_point'] or ""
+                            load_idx = loading_options.index(load_val) if load_val in loading_options else 0
+                            if loading_options:
+                                new_load = st.selectbox("📍 Lieu de chargement", loading_options, index=load_idx, key=f"load_{order_id}")
+                            else:
+                                new_load = st.text_input("📍 Lieu de chargement", value=load_val, key=f"load_{order_id}")
+                            new_unload = row['unloading_point'] or ""
+
+                        drv_keys = list(drv_dict.keys())
+                        curr_drv = row['driver_id'] if row['driver_id'] in drv_keys else None
+                        drv_idx = drv_keys.index(curr_drv) if curr_drv in drv_keys else 0
+                        new_driver = st.selectbox("👤 Chauffeur", drv_keys, format_func=lambda x: drv_dict[x], index=drv_idx, key=f"drv_{order_id}")
+
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("💾 Mettre à jour", key=f"upd_{order_id}", type="primary"):
+                            run_query("""
+                                UPDATE orders SET
+                                    requested_date=:rd, requested_slot=:rs, quantity_tons=:qty,
+                                    material=:mat, waste_type=:waste, driver_id=:did,
+                                    loading_point=:lp, unloading_point=:up,
+                                    updated_at=NOW()
+                                WHERE id=:id
+                            """, {
+                                "rd": new_date, "rs": new_slot, "qty": new_qty,
+                                "mat": new_material, "waste": new_waste, "did": new_driver,
+                                "lp": new_load, "up": new_unload, "id": order_id
+                            })
+                            st.success("✅ Commande mise à jour.")
+                            st.cache_data.clear()
+                            st.rerun()
+                    with col_btn2:
+                        confirm_del = st.checkbox("Confirmer la suppression", key=f"del_confirm_{order_id}")
+                        if confirm_del:
+                            if st.button("🗑️ Supprimer définitivement", key=f"del_{order_id}", type="secondary"):
+                                run_query("DELETE FROM order_issues WHERE order_id=:id", {"id": order_id})
+                                run_query("DELETE FROM orders WHERE id=:id", {"id": order_id})
+                                st.warning("Commande supprimée.")
+                                st.cache_data.clear()
+                                st.rerun()
     except Exception as e:
         st.error(f"Erreur de chargement : {e}")
 
@@ -328,7 +656,7 @@ if navigation == "📊 Tableau de bord - Livraisons":
             st.success("✅ Aucun problème véhicule non résolu.")
         else:
             for _, row in df_vi.iterrows():
-                with st.expander(f"🚨 {row['license_plate']} — {row['description'][:60]}..."):
+                with st.expander(f"🚨 {row['license_plate']} — {str(row['description'])[:60]}..."):
                     st.write(f"**Signalé par :** {row['chauffeur']}")
                     st.write(f"**Le :** {row['created_at']}")
                     st.write(f"**Description :** {row['description']}")
@@ -368,7 +696,7 @@ if navigation == "📊 Tableau de bord - Livraisons":
             st.success("✅ Aucun problème chantier non résolu.")
         else:
             for _, row in df_oi.iterrows():
-                with st.expander(f"🚨 {row['client']} — {row['description'][:60]}"):
+                with st.expander(f"🚨 {row['client']} — {str(row['description'])[:60]}"):
                     st.write(f"**Chauffeur :** {row['chauffeur']}")
                     st.write(f"**Adresse :** {row['address']}")
                     st.write(f"**Le :** {row['created_at']}")
@@ -421,6 +749,10 @@ elif navigation == "➕ Prise de Commande":
     selected_site_id = None
     new_site_label = new_site_address = new_site_gmaps = ""
 
+    # 2a. Type de prestation depuis catalog_items
+    df_stype = load_data("SELECT name FROM catalog_items WHERE category='service_type' ORDER BY name")
+    service_options = df_stype['name'].tolist() if not df_stype.empty else ["Livraison de matériaux", "Location de benne"]
+
     if selected_client_id == "NEW_CLIENT":
         st.info("Renseignez les informations de facturation du nouveau client.")
         c_nc1, c_nc2 = st.columns(2)
@@ -443,7 +775,7 @@ elif navigation == "➕ Prise de Commande":
             st.caption("Allez sur Google Maps, placez un repère, cliquez sur 'Partager' puis 'Copier le lien'.")
 
         st.divider()
-        prestation = st.radio("3️⃣ Type de Prestation", ["Livraison de matériaux", "Location de benne", "Autre"], horizontal=True)
+        prestation = st.radio("3️⃣ Type de Prestation", service_options, horizontal=True)
 
     elif selected_client_id is not None:
         df_sites = load_data(
@@ -470,7 +802,7 @@ elif navigation == "➕ Prise de Commande":
                 st.caption("Allez sur Google Maps, placez un repère, cliquez sur 'Partager' puis 'Copier le lien'.")
 
         st.divider()
-        prestation = st.radio("3️⃣ Type de Prestation", ["Livraison de matériaux", "Location de benne", "Autre"], horizontal=True)
+        prestation = st.radio("3️⃣ Type de Prestation", service_options, horizontal=True)
     else:
         prestation = None
 
@@ -478,11 +810,17 @@ elif navigation == "➕ Prise de Commande":
     marchandise = volume_benne = type_benne = action_benne = quantite = None
     instructions = ""
     date_livraison = datetime.date.today()
-    creneau_choisi = "Matin"
+    creneau_choisi = SLOTS[0]
+    loading_point_val = ""
+    unloading_point_val = ""
 
     if prestation is not None:
         st.divider()
-        if prestation == "Livraison de matériaux":
+        # Détecter si c'est une prestation benne
+        is_benne = "benne" in str(prestation).lower()
+
+        if not is_benne:
+            # Livraison de matériaux
             df_mat = load_data("SELECT name FROM catalog_items WHERE category='material' ORDER BY name")
             mat_options = df_mat['name'].tolist() if not df_mat.empty else []
             mat_options_display = mat_options + ["Big Bag"]
@@ -491,7 +829,16 @@ elif navigation == "➕ Prise de Commande":
                 st.warning("⚠️ **Avertissement de tarification :** La livraison en Big Bag se fait en camion grue. Tarification spécifique applicable.")
             quantite = st.number_input("Quantité (tonnes)", min_value=0.0, step=0.5, value=1.0)
 
-        elif prestation == "Location de benne":
+            # 2b. Lieu de chargement
+            df_load_pts = load_data("SELECT name FROM catalog_items WHERE category='loading_point' ORDER BY name")
+            load_options = df_load_pts['name'].tolist() if not df_load_pts.empty else []
+            if load_options:
+                loading_point_val = st.selectbox("📍 Lieu de chargement", load_options)
+            else:
+                loading_point_val = st.text_input("📍 Lieu de chargement")
+
+        else:
+            # Location de benne
             action_benne = st.radio("Action", ["Pose", "Rotation", "Enlèvement", "Déplacement"], horizontal=True)
             df_waste = load_data("SELECT name FROM catalog_items WHERE category='waste' ORDER BY name")
             waste_options = df_waste['name'].tolist() if not df_waste.empty else []
@@ -502,15 +849,25 @@ elif navigation == "➕ Prise de Commande":
             if type_benne and "gravat" in str(type_benne).lower():
                 st.warning("⚠️ Pour les gravats, le volume maximum conseillé est de 10m3")
 
+            # 2b. Point de déchargement
+            df_unload_pts = load_data("SELECT name FROM catalog_items WHERE category='unloading_point' ORDER BY name")
+            unload_options = df_unload_pts['name'].tolist() if not df_unload_pts.empty else []
+            if unload_options:
+                unloading_point_val = st.selectbox("📍 Point de déchargement", unload_options)
+            else:
+                unloading_point_val = st.text_input("📍 Point de déchargement")
+
         st.divider()
-        date_livraison = st.date_input("📅 Date souhaitée", value=datetime.date.today() + datetime.timedelta(days=1))
+        # 2d. Format DD/MM/YYYY
+        date_livraison = st.date_input("📅 Date souhaitée", value=datetime.date.today() + datetime.timedelta(days=1), format="DD/MM/YYYY")
         est_valide, msg_valide = est_jour_ouvrable(date_livraison)
         if not est_valide:
             st.error(msg_valide)
         else:
             st.success(msg_valide)
 
-        creneau_choisi = st.radio("Créneau", ["Matin", "Après-midi", "Journée entière"], horizontal=True)
+        # 2c. Créneaux standardisés
+        creneau_choisi = st.selectbox("⏰ Créneau", SLOTS)
         instructions = st.text_area("Instructions particulières (Accès, contact sur place...)")
 
         st.divider()
@@ -551,17 +908,20 @@ elif navigation == "➕ Prise de Commande":
                 else:
                     final_site_id = selected_site_id if selected_site_id not in ("BILLING", None) else None
 
-                service_final = f"Benne - {action_benne}" if prestation == "Location de benne" else prestation
+                service_final = f"Benne - {action_benne}" if is_benne else prestation
                 run_query("""
                     INSERT INTO orders (client_id, site_id, service_type, material, quantity_tons,
-                        container_type, waste_type, instructions, status, source, requested_date, requested_slot)
+                        container_type, waste_type, instructions, status, source, requested_date,
+                        requested_slot, loading_point, unloading_point)
                     VALUES (:client_id, :site_id, :service_type, :material, :quantity,
-                        :container_type, :waste_type, :instructions, 'pending', 'admin_streamlit', :req_date, :req_slot)
+                        :container_type, :waste_type, :instructions, 'pending', 'admin_streamlit',
+                        :req_date, :req_slot, :lp, :up)
                 """, {
                     "client_id": final_client_id, "site_id": final_site_id, "service_type": service_final,
                     "material": marchandise, "quantity": quantite, "container_type": volume_benne,
                     "waste_type": type_benne, "instructions": instructions,
-                    "req_date": date_livraison, "req_slot": creneau_choisi
+                    "req_date": date_livraison, "req_slot": creneau_choisi,
+                    "lp": loading_point_val, "up": unloading_point_val
                 })
                 st.success(f"🎉 Commande enregistrée pour le {date_livraison.strftime('%d/%m/%Y')} (Créneau : {creneau_choisi}).")
                 st.cache_data.clear()
@@ -575,7 +935,8 @@ elif navigation == "📅 Planning & Assignation":
     st.title("📅 Planning & Assignation")
     import time
 
-    date_planning = st.date_input("Date du planning à préparer", value=datetime.date.today())
+    # 3a. Format DD/MM/YYYY
+    date_planning = st.date_input("Date du planning à préparer", value=datetime.date.today(), format="DD/MM/YYYY")
 
     with st.expander("🧠 Assistant de Pré-assignation par I.A."):
         api_key = st.text_input("Clé API OpenAI / Gemini", type="password")
@@ -654,12 +1015,13 @@ elif navigation == "📅 Planning & Assignation":
                 st.error(f"Erreur : {e}")
 
     st.markdown("---")
-    st.write(f"### 1️⃣ Sélectionner les commandes du {date_planning.strftime('%d/%m/%Y')}")
+    st.write(f"### 1️⃣ Planning du {date_planning.strftime('%d/%m/%Y')}")
     try:
         df_plan = load_data("""
             SELECT o.id, c.name as client, o.service_type, o.requested_slot,
                    COALESCE(o.material, o.waste_type) as details,
                    s.address, o.status,
+                   o.driver_id,
                    CONCAT(d.first_name, ' ', d.last_name) as chauffeur,
                    v.license_plate as vehicule
             FROM orders o
@@ -667,23 +1029,10 @@ elif navigation == "📅 Planning & Assignation":
             LEFT JOIN sites s ON o.site_id = s.id
             LEFT JOIN drivers d ON o.driver_id = d.id
             LEFT JOIN vehicles v ON o.vehicle_id = v.id
-            WHERE o.requested_date = :d AND o.status IN ('pending', 'planned')
-            ORDER BY o.id
+            WHERE o.requested_date = :d AND o.status IN ('pending', 'planned', 'dispatched')
+            ORDER BY o.driver_id NULLS FIRST, o.id
         """, {"d": date_planning})
 
-        selected_order_ids = []
-        if df_plan.empty:
-            st.info("Aucune commande à planifier pour cette date.")
-        else:
-            for _, row in df_plan.iterrows():
-                checked = st.checkbox(
-                    f"[{row['status'].upper()}] {row['client']} — {row['service_type']} — {row['details']} ({row['requested_slot']})",
-                    key=f"chk_{row['id']}"
-                )
-                if checked:
-                    selected_order_ids.append(row['id'])
-
-        st.write("### 2️⃣ Assigner les ressources à la sélection")
         df_drivers_sel = load_data("SELECT id, first_name, last_name FROM drivers WHERE is_active = true")
         df_vehicles_sel = load_data("SELECT id, license_plate, name, type FROM vehicles WHERE is_available = true")
 
@@ -698,6 +1047,40 @@ elif navigation == "📅 Planning & Assignation":
             veh_dict_sel[r['id']] = label
             trailer_dict[r['id']] = label
 
+        selected_order_ids = []
+        if df_plan.empty:
+            st.info("Aucune commande à planifier pour cette date.")
+        else:
+            # 3b. Tableau groupé par chauffeur
+            unassigned = df_plan[df_plan['driver_id'].isna()]
+            assigned = df_plan[df_plan['driver_id'].notna()]
+
+            # Commandes non assignées
+            if not unassigned.empty:
+                st.write("#### 🔴 Non assignées")
+                for _, row in unassigned.iterrows():
+                    checked = st.checkbox(
+                        f"[{row['status'].upper()}] {row['client']} — {row['service_type']} — {row['details']} ({row['requested_slot']})",
+                        key=f"chk_{row['id']}"
+                    )
+                    if checked:
+                        selected_order_ids.append(row['id'])
+
+            # Grouper par chauffeur
+            if not assigned.empty:
+                grouped_drivers = assigned.groupby('driver_id')
+                for driver_id, group in grouped_drivers:
+                    driver_name = group.iloc[0]['chauffeur'] or f"Chauffeur #{driver_id}"
+                    with st.expander(f"👤 {driver_name} ({len(group)} mission(s))"):
+                        for _, row in group.iterrows():
+                            checked = st.checkbox(
+                                f"[{row['status'].upper()}] {row['client']} — {row['service_type']} — {row['details']} ({row['requested_slot']})",
+                                key=f"chk_{row['id']}"
+                            )
+                            if checked:
+                                selected_order_ids.append(row['id'])
+
+        st.write("### 2️⃣ Assigner les ressources à la sélection")
         c_as1, c_as2, c_as3 = st.columns(3)
         with c_as1:
             assign_driver = st.selectbox("Chauffeur", options=list(drv_dict.keys()), format_func=lambda x: drv_dict[x])
@@ -734,7 +1117,7 @@ elif navigation == "📍 Suivi du Parc de Bennes":
             FROM orders o
             LEFT JOIN clients c ON o.client_id = c.id
             LEFT JOIN sites s ON o.site_id = s.id
-            WHERE o.status IN ('planned', 'in_progress')
+            WHERE o.status IN ('planned', 'dispatched')
               AND o.service_type LIKE 'Benne - Pose%'
             GROUP BY o.container_type, c.name, s.address, s.gmaps_link
         """)
@@ -793,17 +1176,19 @@ elif navigation == "👥 Gestion des Chauffeurs":
             with c_d1:
                 d_prenom = st.text_input("Prénom *")
                 d_nom = st.text_input("Nom *")
+                d_nationality = st.text_input("Nationalité", value="Français")
                 d_tel = st.text_input("Téléphone")
                 d_email = st.text_input("Email")
+                d_whatsapp = st.text_input("WhatsApp (ex: +336...)")
                 d_notes = st.text_area("Période d'absence (ex: Congés du 12 au 20 Août)")
             with c_d2:
                 d_permis = st.text_input("N° de Permis de Conduire")
                 st.write("CACES / Habilitations")
                 d_caces = st.checkbox("CACES Grue Auxiliaire")
-                d_fimo_exp = st.date_input("Validité FIMO / FCO *", value=datetime.date.today() + datetime.timedelta(days=365))
+                d_fimo_exp = st.date_input("Validité FIMO / FCO *", value=datetime.date.today() + datetime.timedelta(days=365), format="DD/MM/YYYY")
                 d_carte_num = st.text_input("N° Carte Conducteur")
-                d_carte_exp = st.date_input("Validité Carte Conducteur *", value=datetime.date.today() + datetime.timedelta(days=365))
-                d_caces_exp = st.date_input("Validité CACES (général)", value=datetime.date.today() + datetime.timedelta(days=365))
+                d_carte_exp = st.date_input("Validité Carte Conducteur *", value=datetime.date.today() + datetime.timedelta(days=365), format="DD/MM/YYYY")
+                d_caces_exp = st.date_input("Validité CACES (général)", value=datetime.date.today() + datetime.timedelta(days=365), format="DD/MM/YYYY")
 
             submitted_d = st.form_submit_button("➕ Ajouter le chauffeur", type="primary")
             if submitted_d:
@@ -811,15 +1196,20 @@ elif navigation == "👥 Gestion des Chauffeurs":
                     st.error("Prénom et Nom sont obligatoires.")
                 else:
                     try:
+                        # Stocker WhatsApp dans notes avec préfixe WA:
+                        notes_final = d_notes or ""
+                        if d_whatsapp:
+                            notes_final = f"WA:{d_whatsapp}\n{notes_final}".strip()
                         run_query("""
-                            INSERT INTO drivers (first_name, last_name, phone, email, license_expiry,
-                                fimo_fco_expiry, driver_card_number, driver_card_expiry, caces_expiry,
-                                notes, is_active)
-                            VALUES (:fn, :ln, :ph, :em, :le, :fimo, :dcn, :dce, :ce, :notes, true)
+                            INSERT INTO drivers (first_name, last_name, phone, email, nationality,
+                                license_expiry, fimo_fco_expiry, driver_card_number, driver_card_expiry,
+                                caces_expiry, notes, is_active)
+                            VALUES (:fn, :ln, :ph, :em, :nat, :le, :fimo, :dcn, :dce, :ce, :notes, true)
                         """, {
                             "fn": d_prenom, "ln": d_nom, "ph": d_tel, "em": d_email,
-                            "le": None, "fimo": d_fimo_exp, "dcn": d_carte_num,
-                            "dce": d_carte_exp, "ce": d_caces_exp, "notes": d_notes
+                            "nat": d_nationality, "le": None, "fimo": d_fimo_exp,
+                            "dcn": d_carte_num, "dce": d_carte_exp, "ce": d_caces_exp,
+                            "notes": notes_final
                         })
                         st.success(f"✅ Chauffeur {d_prenom} {d_nom} ajouté !")
                         st.cache_data.clear()
@@ -830,8 +1220,11 @@ elif navigation == "👥 Gestion des Chauffeurs":
     st.write("### 📋 Liste des Chauffeurs")
     try:
         df_drv_list = load_data("""
-            SELECT id, first_name, last_name, phone, email, notes as absences,
-                   license_expiry, fimo_fco_expiry, driver_card_expiry
+            SELECT id, first_name as "Prénom", last_name as "Nom",
+                   nationality as "Nationalité", phone as "Téléphone",
+                   email as "Email", notes as "Notes/Absences",
+                   license_expiry as "Permis exp.", fimo_fco_expiry as "FCO exp.",
+                   driver_card_expiry as "Carte Cond. exp."
             FROM drivers ORDER BY first_name
         """)
         if df_drv_list.empty:
@@ -851,31 +1244,47 @@ elif navigation == "👥 Gestion des Chauffeurs":
             if edit_drv_id:
                 df_edit = load_data("SELECT * FROM drivers WHERE id = :id", {"id": edit_drv_id})
                 r = df_edit.iloc[0]
+                # Extraire WhatsApp depuis les notes
+                notes_raw = r['notes'] or ""
+                wa_val = ""
+                notes_display = notes_raw
+                if notes_raw.startswith("WA:"):
+                    lines = notes_raw.split("\n", 1)
+                    wa_val = lines[0][3:].strip()
+                    notes_display = lines[1].strip() if len(lines) > 1 else ""
+
                 with st.form("edit_driver_form"):
                     ec1, ec2 = st.columns(2)
                     with ec1:
                         e_prenom = st.text_input("Prénom", value=r['first_name'] or "")
                         e_nom = st.text_input("Nom", value=r['last_name'] or "")
+                        e_nationality = st.text_input("Nationalité", value=r['nationality'] or "Français")
                         e_tel = st.text_input("Téléphone", value=r['phone'] or "")
                         e_email = st.text_input("Email", value=r['email'] or "")
-                        e_notes = st.text_area("Absences", value=r['notes'] or "")
+                        e_whatsapp = st.text_input("WhatsApp", value=wa_val)
+                        e_notes = st.text_area("Absences", value=notes_display)
                     with ec2:
-                        e_fimo = st.date_input("Validité FIMO/FCO", value=r['fimo_fco_expiry'] if pd.notna(r['fimo_fco_expiry']) else datetime.date.today())
+                        e_fimo = st.date_input("Validité FIMO/FCO", value=r['fimo_fco_expiry'] if pd.notna(r['fimo_fco_expiry']) else datetime.date.today(), format="DD/MM/YYYY")
                         e_dcnum = st.text_input("N° Carte Conducteur", value=r['driver_card_number'] or "")
-                        e_dcexp = st.date_input("Validité Carte Conducteur", value=r['driver_card_expiry'] if pd.notna(r['driver_card_expiry']) else datetime.date.today())
-                        e_caces = st.date_input("Validité CACES", value=r['caces_expiry'] if pd.notna(r['caces_expiry']) else datetime.date.today())
+                        e_dcexp = st.date_input("Validité Carte Conducteur", value=r['driver_card_expiry'] if pd.notna(r['driver_card_expiry']) else datetime.date.today(), format="DD/MM/YYYY")
+                        e_caces = st.date_input("Validité CACES", value=r['caces_expiry'] if pd.notna(r['caces_expiry']) else datetime.date.today(), format="DD/MM/YYYY")
                         e_active = st.checkbox("Actif", value=bool(r['is_active']))
                     e_sub = st.form_submit_button("💾 Enregistrer les modifications", type="primary")
                     if e_sub:
+                        # Recomposer les notes
+                        new_notes = e_notes or ""
+                        if e_whatsapp:
+                            new_notes = f"WA:{e_whatsapp}\n{new_notes}".strip()
                         run_query("""
                             UPDATE drivers SET first_name=:fn, last_name=:ln, phone=:ph, email=:em,
-                                fimo_fco_expiry=:fimo, driver_card_number=:dcn, driver_card_expiry=:dce,
-                                caces_expiry=:ce, notes=:notes, is_active=:active
+                                nationality=:nat, fimo_fco_expiry=:fimo, driver_card_number=:dcn,
+                                driver_card_expiry=:dce, caces_expiry=:ce, notes=:notes, is_active=:active
                             WHERE id=:id
                         """, {
                             "fn": e_prenom, "ln": e_nom, "ph": e_tel, "em": e_email,
-                            "fimo": e_fimo, "dcn": e_dcnum, "dce": e_dcexp, "ce": e_caces,
-                            "notes": e_notes, "active": e_active, "id": edit_drv_id
+                            "nat": e_nationality, "fimo": e_fimo, "dcn": e_dcnum,
+                            "dce": e_dcexp, "ce": e_caces, "notes": new_notes,
+                            "active": e_active, "id": edit_drv_id
                         })
                         st.success("✅ Chauffeur mis à jour.")
                         st.cache_data.clear()
@@ -900,9 +1309,9 @@ elif navigation == "🚚 Gestion de la Flotte":
                 v_type = st.selectbox("Type de véhicule", ["Camion benne", "Camion grue", "Porteur", "Semi-remorque", "Remorque", "Autre"])
                 v_is_trailer = st.checkbox("Ce véhicule est remorqueur (attelage)")
             with cv2:
-                v_ct = st.date_input("Date CT (Contrôle Technique)", value=datetime.date.today() + datetime.timedelta(days=365))
-                v_tacho = st.date_input("Chronotachygraphe valide jusqu'au", value=datetime.date.today() + datetime.timedelta(days=365))
-                v_limiter = st.date_input("Limiteur de vitesse valide jusqu'au", value=datetime.date.today() + datetime.timedelta(days=365))
+                v_ct = st.date_input("Date CT (Contrôle Technique)", value=datetime.date.today() + datetime.timedelta(days=365), format="DD/MM/YYYY")
+                v_tacho = st.date_input("Chronotachygraphe valide jusqu'au", value=datetime.date.today() + datetime.timedelta(days=365), format="DD/MM/YYYY")
+                v_limiter = st.date_input("Limiteur de vitesse valide jusqu'au", value=datetime.date.today() + datetime.timedelta(days=365), format="DD/MM/YYYY")
             v_sub = st.form_submit_button("➕ Ajouter le véhicule", type="primary")
             if v_sub:
                 if not v_plate:
@@ -958,9 +1367,9 @@ elif navigation == "🚚 Gestion de la Flotte":
                         ev_type = st.text_input("Type", value=rv['type'] or "")
                         ev_avail = st.checkbox("Disponible", value=bool(rv['is_available']))
                     with ev2:
-                        ev_ct = st.date_input("CT valide jusqu'au", value=rv['control_valid_until'] if pd.notna(rv['control_valid_until']) else datetime.date.today())
-                        ev_tacho = st.date_input("Chronotachygraphe valide jusqu'au", value=rv['tachograph_valid_until'] if pd.notna(rv['tachograph_valid_until']) else datetime.date.today())
-                        ev_limiter = st.date_input("Limiteur valide jusqu'au", value=rv['speed_limiter_valid_until'] if pd.notna(rv['speed_limiter_valid_until']) else datetime.date.today())
+                        ev_ct = st.date_input("CT valide jusqu'au", value=rv['control_valid_until'] if pd.notna(rv['control_valid_until']) else datetime.date.today(), format="DD/MM/YYYY")
+                        ev_tacho = st.date_input("Chronotachygraphe valide jusqu'au", value=rv['tachograph_valid_until'] if pd.notna(rv['tachograph_valid_until']) else datetime.date.today(), format="DD/MM/YYYY")
+                        ev_limiter = st.date_input("Limiteur valide jusqu'au", value=rv['speed_limiter_valid_until'] if pd.notna(rv['speed_limiter_valid_until']) else datetime.date.today(), format="DD/MM/YYYY")
                     ev_sub = st.form_submit_button("💾 Enregistrer", type="primary")
                     if ev_sub:
                         run_query("""
@@ -1018,7 +1427,7 @@ elif navigation == "📱 Vue Chauffeur (Mobile)":
     st.title("📱 Vue Chauffeur (Mobile)")
 
     try:
-        df_drv_mobile = load_data("SELECT id, first_name, last_name FROM drivers WHERE is_active = true ORDER BY first_name")
+        df_drv_mobile = load_data("SELECT id, first_name, last_name, nationality FROM drivers WHERE is_active = true ORDER BY first_name")
         if df_drv_mobile.empty:
             st.warning("Aucun chauffeur actif.")
             st.stop()
@@ -1027,13 +1436,19 @@ elif navigation == "📱 Vue Chauffeur (Mobile)":
         chauffeur_id = st.selectbox("Se connecter en tant que :", options=list(drv_mobile_dict.keys()),
                                      format_func=lambda x: drv_mobile_dict[x])
 
+        # Détecter langue selon nationalité
+        drv_row = df_drv_mobile[df_drv_mobile['id'] == chauffeur_id].iloc[0]
+        L = get_lang(drv_row.get('nationality', 'Français'))
+
         today_mobile = datetime.date.today()
+
+        # 5a. Véhicule assigné UNIQUEMENT depuis orders du jour
         df_assigned = load_data("""
             SELECT o.vehicle_id as truck_id, v.license_plate as truck_label,
-                   o.trailer_id as t_id, t.license_plate as trailer_label
+                   o.trailer_id as t_id, tr.license_plate as trailer_label
             FROM orders o
             LEFT JOIN vehicles v ON o.vehicle_id = v.id
-            LEFT JOIN vehicles t ON o.trailer_id = t.id
+            LEFT JOIN vehicles tr ON o.trailer_id = tr.id
             WHERE o.driver_id = :did AND o.requested_date = :d
             LIMIT 1
         """, {"did": chauffeur_id, "d": today_mobile})
@@ -1047,63 +1462,56 @@ elif navigation == "📱 Vue Chauffeur (Mobile)":
             row_a = df_assigned.iloc[0]
             assigned_truck_id = row_a['truck_id']
             assigned_truck_label = row_a['truck_label'] or "Aucun"
-            if pd.notna(row_a['t_id']):
+            if pd.notna(row_a.get('t_id')):
                 assigned_trailer_id = row_a['t_id']
                 assigned_trailer_label = row_a['trailer_label']
 
-        st.write("### 🚚 Mes Véhicules")
-        st.caption("Cliquez pour signaler un problème (usure, casse, saleté...)")
+        st.write(f"### {L['my_vehicles']}")
 
-        df_all_veh_m = load_data("SELECT id, license_plate, name, type FROM vehicles WHERE is_available = true")
-        veh_dict_m = dict(zip(df_all_veh_m['id'], df_all_veh_m['license_plate'] + " - " + df_all_veh_m['type'] + " (" + df_all_veh_m['name'].fillna('') + ")"))
-        keys_list_m = [None] + list(veh_dict_m.keys())
-
-        def issue_form(veh_id, form_key):
-            with st.form(form_key):
-                final_veh_id = veh_id
-                if veh_id is None:
-                    final_veh_id = st.selectbox("Véhicule concerné :", options=keys_list_m,
-                                                  format_func=lambda x: "--- Choisir un véhicule ---" if x is None else veh_dict_m.get(x, str(x)))
-                issue_type = st.selectbox("Type de problème", ["Pneu usé / crevé", "Feu cassé", "Carrosserie endommagée", "Intérieur sale", "Problème moteur / Voyant", "Autre"])
-                desc = st.text_area("Explication détaillée", placeholder="Ex: Feu arrière droit brisé en reculant ce matin...")
-                photo_file = st.file_uploader("Photo 📸 (optionnelle)", type=["jpg", "jpeg", "png"])
-                submitted = st.form_submit_button("Envoyer le signalement 🚀", type="primary", use_container_width=True)
-                if submitted:
-                    if final_veh_id and desc:
-                        photo_path = ""
-                        if photo_file is not None:
-                            os.makedirs("uploads/photos", exist_ok=True)
-                            filename = f"{uuid.uuid4().hex}.jpg"
-                            filepath = os.path.join("uploads/photos", filename)
-                            with open(filepath, "wb") as f:
-                                f.write(photo_file.getbuffer())
-                            photo_path = filepath
-                        run_query(
-                            "INSERT INTO vehicle_issues (driver_id, vehicle_id, description, photo_data) VALUES (:did, :vid, :desc, :pic)",
-                            {"did": chauffeur_id, "vid": final_veh_id, "desc": f"[{issue_type}] {desc}", "pic": photo_path}
-                        )
-                        st.success("✅ Problème signalé !")
-                    else:
-                        st.error("⚠️ L'explication détaillée et le véhicule sont obligatoires.")
+        def issue_form_mobile(veh_id, form_key, veh_label):
+            with st.expander(f"🚨 Signaler problème : {veh_label}"):
+                with st.form(form_key):
+                    issue_type = st.selectbox(L['issue_type'], ["Pneu usé / crevé", "Feu cassé", "Carrosserie endommagée", "Intérieur sale", "Problème moteur / Voyant", "Autre"])
+                    desc = st.text_area(L['issue_desc'], placeholder="Ex: Feu arrière droit brisé en reculant ce matin...")
+                    photo_cam = st.camera_input("📸 Prendre une photo")
+                    photo_file = st.file_uploader("📎 Ou importer une photo", type=["jpg", "jpeg", "png"], key=f"upl_{form_key}")
+                    submitted = st.form_submit_button("🚀 Envoyer le signalement", type="primary", use_container_width=True)
+                    if submitted:
+                        if veh_id and desc:
+                            photo_path = ""
+                            photo_src = photo_cam or photo_file
+                            if photo_src is not None:
+                                os.makedirs("uploads/photos", exist_ok=True)
+                                filename = f"{uuid.uuid4().hex}.jpg"
+                                filepath = os.path.join("uploads/photos", filename)
+                                with open(filepath, "wb") as f:
+                                    f.write(photo_src.getbuffer())
+                                photo_path = filepath
+                            run_query(
+                                "INSERT INTO vehicle_issues (driver_id, vehicle_id, description, photo_data) VALUES (:did, :vid, :desc, :pic)",
+                                {"did": chauffeur_id, "vid": veh_id, "desc": f"[{issue_type}] {desc}", "pic": photo_path}
+                            )
+                            st.success("✅ Problème signalé !")
+                        else:
+                            st.error("⚠️ Description obligatoire.")
 
         if assigned_truck_id:
-            with st.expander(f"🚛 Camion assigné : {assigned_truck_label}"):
-                issue_form(assigned_truck_id, "form_truck")
+            issue_form_mobile(assigned_truck_id, "form_truck", f"{L['assigned_truck']} : {assigned_truck_label}")
             if assigned_trailer_label:
-                with st.expander(f"🔗 Remorque assignée : {assigned_trailer_label}"):
-                    issue_form(assigned_trailer_id, "form_trailer")
+                issue_form_mobile(assigned_trailer_id, "form_trailer", f"{L['assigned_trailer']} : {assigned_trailer_label}")
         else:
-            st.warning("Aucun véhicule assigné automatiquement aujourd'hui dans le planning.")
-
-        with st.expander("🚨 Signaler un problème sur un AUTRE véhicule"):
-            issue_form(None, "form_other")
+            st.warning(L['no_vehicle'])
 
         st.divider()
-        st.write("### 📋 Mes missions du jour")
+        st.write(f"### 📋 {L['my_missions']}")
+
+        # 5b. Missions avec détails selon type
         df_missions = load_data("""
-            SELECT o.id, c.name as client, s.address, s.gmaps_link,
-                   o.service_type, COALESCE(o.material, o.waste_type) as details,
-                   o.requested_slot, o.instructions, o.status
+            SELECT o.id, c.name as client_name, c.phone as client_phone,
+                   s.address, s.gmaps_link,
+                   o.service_type, o.material, o.waste_type,
+                   o.quantity_tons, o.requested_slot, o.instructions,
+                   o.status, o.container_type, o.loading_point, o.unloading_point
             FROM orders o
             LEFT JOIN clients c ON o.client_id = c.id
             LEFT JOIN sites s ON o.site_id = s.id
@@ -1112,38 +1520,71 @@ elif navigation == "📱 Vue Chauffeur (Mobile)":
         """, {"did": chauffeur_id, "d": today_mobile})
 
         if df_missions.empty:
-            st.info("Aucune mission pour aujourd'hui.")
+            st.info(L['no_mission'])
         else:
             for _, m in df_missions.iterrows():
-                with st.expander(f"📦 {m['client']} — {m['service_type']} ({m['requested_slot']})"):
-                    st.write(f"**Adresse :** {m['address']}")
+                stype = str(m['service_type'] or "").lower()
+                is_benne_mission = "benne" in stype
+                is_rotation_enlev = any(x in stype for x in ["rotation", "enlèvement", "enlevement", "déplacement"])
+
+                mission_label = f"📦 {m['client_name']} — {m['service_type']} ({m['requested_slot'] or '?'})"
+                with st.expander(mission_label):
+                    # Détails selon type de prestation
+                    st.write(f"**{L['client']} :** {m['client_name']}")
+                    st.write(f"**{L['address']} :** {m['address']}")
+
                     if m['gmaps_link']:
-                        st.markdown(f"[🗺️ Ouvrir dans Google Maps]({m['gmaps_link']})")
-                    st.write(f"**Détails :** {m['details']}")
+                        st.markdown(f"[{L['open_maps']}]({m['gmaps_link']})")
+
+                    if m['client_phone']:
+                        st.write(f"**{L['phone']} :** {m['client_phone']}")
+
+                    if not is_benne_mission:
+                        # Livraison matériaux
+                        if m['material']:
+                            st.write(f"**{L['product']} :** {m['material']}")
+                        if m['quantity_tons']:
+                            st.write(f"**{L['quantity']} :** {m['quantity_tons']} t")
+                        if m['loading_point']:
+                            st.write(f"**{L['loading_point']} :** {m['loading_point']}")
+                    else:
+                        # Location benne
+                        if m['waste_type']:
+                            st.write(f"**{L['waste']} :** {m['waste_type']}")
+                        if m['container_type']:
+                            st.write(f"**{L['container_size']} :** {m['container_type']}")
+                        if is_rotation_enlev and m['unloading_point']:
+                            st.write(f"**{L['unloading_point']} :** {m['unloading_point']}")
+
+                    st.write(f"**{L['slot']} :** {m['requested_slot'] or '?'}")
+
                     if m['instructions']:
-                        st.info(f"ℹ️ {m['instructions']}")
+                        st.info(f"💬 {L['comment']} : {m['instructions']}")
 
                     col_m1, col_m2 = st.columns(2)
                     with col_m1:
-                        if st.button("✅ LIVRÉ", key=f"done_{m['id']}", use_container_width=True, type="primary"):
-                            run_query("UPDATE orders SET status='completed' WHERE id=:id", {"id": m['id']})
+                        if st.button(L['delivered'], key=f"done_{m['id']}", use_container_width=True, type="primary"):
+                            run_query("UPDATE orders SET status='done' WHERE id=:id", {"id": m['id']})
                             st.success("Mission validée !")
                             st.cache_data.clear()
                             st.rerun()
                     with col_m2:
-                        with st.expander("❌ Signaler un problème"):
+                        # 5c. Signalement problème livraison avec photo
+                        with st.expander(L['report_issue']):
                             with st.form(f"mission_issue_{m['id']}"):
                                 issue_desc = st.text_area("Décrivez le problème")
-                                issue_photo = st.file_uploader("Photo 📸", type=["jpg", "jpeg", "png"], key=f"ph_{m['id']}")
-                                if st.form_submit_button("🚨 Envoyer l'alerte au bureau", type="primary", use_container_width=True):
+                                issue_photo_cam = st.camera_input("📸 Prendre une photo")
+                                issue_photo_file = st.file_uploader("📎 Ou importer", type=["jpg", "jpeg", "png"], key=f"ph_{m['id']}")
+                                if st.form_submit_button(L['send_alert'], type="primary", use_container_width=True):
                                     if issue_desc:
                                         pic_path = ""
-                                        if issue_photo is not None:
+                                        photo_src = issue_photo_cam or issue_photo_file
+                                        if photo_src is not None:
                                             os.makedirs("uploads/photos", exist_ok=True)
                                             filename = f"{uuid.uuid4().hex}.jpg"
                                             filepath = os.path.join("uploads/photos", filename)
                                             with open(filepath, "wb") as f:
-                                                f.write(issue_photo.getbuffer())
+                                                f.write(photo_src.getbuffer())
                                             pic_path = filepath
                                         run_query(
                                             "INSERT INTO order_issues (order_id, driver_id, description, photo_data) VALUES (:oid, :did, :desc, :pic)",
@@ -1154,6 +1595,80 @@ elif navigation == "📱 Vue Chauffeur (Mobile)":
                                         st.error("La description est obligatoire.")
     except Exception as e:
         st.error(f"Erreur : {e}")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE: CENTRE DE TRI
+# ─────────────────────────────────────────────────────────────────────────────
+elif navigation == "♻️ Centre de Tri":
+    st.title("♻️ Centre de Tri")
+    st.caption("Gestion des bennes internes du centre de tri")
+
+    try:
+        df_bins = load_data("SELECT id, bin_type, container_size, status, notes FROM sorting_center_bins ORDER BY bin_type")
+
+        if df_bins.empty:
+            st.info("Aucune benne enregistrée dans le centre de tri.")
+        else:
+            st.write("### 🗑️ État des bennes")
+            for _, bin_row in df_bins.iterrows():
+                col_info, col_action = st.columns([3, 1])
+                is_full = str(bin_row['status']).lower() == 'full'
+                fill_ratio = 1.0 if is_full else 0.5
+                status_label = "🔴 PLEINE" if is_full else "🟢 OK"
+
+                with col_info:
+                    st.write(f"**{bin_row['bin_type']}** ({bin_row['container_size']}) — {status_label}")
+                    st.progress(fill_ratio, text=f"{bin_row['bin_type']} — {int(fill_ratio * 100)}%")
+                    if bin_row['notes']:
+                        st.caption(f"Note : {bin_row['notes']}")
+
+                with col_action:
+                    if not is_full:
+                        if st.button(f"🚨 Marquer PLEINE", key=f"full_{bin_row['id']}"):
+                            run_query("UPDATE sorting_center_bins SET status='full' WHERE id=:id", {"id": bin_row['id']})
+                            st.cache_data.clear()
+                            st.rerun()
+                    else:
+                        if st.button(f"📋 Créer enlèvement", key=f"create_order_{bin_row['id']}", type="primary"):
+                            try:
+                                run_query("""
+                                    INSERT INTO orders (service_type, waste_type, status, source, requested_date, instructions)
+                                    VALUES ('Location de benne', :waste, 'pending', 'centre_tri', CURRENT_DATE, :notes)
+                                """, {
+                                    "waste": bin_row['bin_type'],
+                                    "notes": f"Enlèvement benne centre de tri - {bin_row['bin_type']} ({bin_row['container_size']})"
+                                })
+                                run_query("UPDATE sorting_center_bins SET status='ok' WHERE id=:id", {"id": bin_row['id']})
+                                st.success(f"✅ Commande d'enlèvement créée pour {bin_row['bin_type']} !")
+                                st.cache_data.clear()
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erreur création commande : {e}")
+                st.divider()
+
+        # Ajouter une benne
+        with st.expander("➕ Ajouter une benne au centre"):
+            with st.form("add_bin_form"):
+                new_bin_type = st.text_input("Type de benne (ex: Bois, Placo, Carton...)")
+                new_bin_size = st.text_input("Taille", value="10m3")
+                new_bin_notes = st.text_area("Notes")
+                if st.form_submit_button("➕ Ajouter"):
+                    if new_bin_type:
+                        try:
+                            run_query("""
+                                INSERT INTO sorting_center_bins (bin_type, container_size, status, notes)
+                                VALUES (:bt, :bs, 'ok', :notes)
+                                ON CONFLICT (bin_type) DO NOTHING
+                            """, {"bt": new_bin_type, "bs": new_bin_size, "notes": new_bin_notes})
+                            st.success(f"Benne {new_bin_type} ajoutée !")
+                            st.cache_data.clear()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erreur : {e}")
+                    else:
+                        st.error("Le type est obligatoire.")
+    except Exception as e:
+        st.error(f"Erreur centre de tri : {e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE: PARAMÈTRES DE L'ENTREPRISE
@@ -1175,19 +1690,20 @@ elif navigation == "⚙️ Paramètres de l'Entreprise":
 
     st.markdown("---")
     st.write("### 🔒 Modification Sécurisée")
-    pin_input = st.text_input("Code PIN Admin", type="password", max_chars=6)
+    # 6a. PIN = "2026"
+    pin_input = st.text_input("Code PIN Admin", type="password", max_chars=10)
     pin_ok = False
     if pin_input:
         try:
             df_pin = load_data("SELECT value FROM system_settings WHERE key='admin_pin'")
-            stored_pin = df_pin.iloc[0]['value'] if not df_pin.empty else "1234"
+            stored_pin = df_pin.iloc[0]['value'] if not df_pin.empty else "2026"
             if pin_input == stored_pin:
                 pin_ok = True
                 st.success("Accès Admin Déverrouillé 🔓")
             else:
                 st.error("PIN incorrect.")
         except Exception:
-            if pin_input == "1234":
+            if pin_input == "2026":
                 pin_ok = True
                 st.success("Accès Admin Déverrouillé 🔓")
 
@@ -1240,53 +1756,78 @@ elif navigation == "⚙️ Paramètres de l'Entreprise":
             st.error(f"Erreur : {e}")
 
     st.markdown("---")
-    st.write("### 🛒 Catalogue : Matériaux & Déchets")
-    tab_mat, tab_waste = st.tabs(["Matériaux (Livraisons)", "Déchets (Bennes)"])
-    with tab_mat:
-        try:
-            df_mat_cat = load_data("SELECT id, name, unit, price_ht FROM catalog_items WHERE category='material' ORDER BY name")
-            if df_mat_cat.empty:
-                st.info("Aucun matériau dans le catalogue.")
-            else:
-                st.dataframe(df_mat_cat.drop(columns=['id']), use_container_width=True)
-            if pin_ok:
-                with st.form("add_material"):
-                    m_name = st.text_input("Nom du matériau")
-                    m_unit = st.text_input("Unité (ex: tonne, m3)")
-                    m_price = st.number_input("Prix HT", min_value=0.0)
-                    if st.form_submit_button("➕ Ajouter"):
-                        if m_name:
-                            run_query("INSERT INTO catalog_items (name, category, unit, price_ht) VALUES (:n, 'material', :u, :p)", {"n": m_name, "u": m_unit, "p": m_price})
-                            st.success("Matériau ajouté !")
-                            st.cache_data.clear()
-                            st.rerun()
-        except Exception as e:
-            st.error(f"Erreur : {e}")
+    # 6b-6d. Catalogue avec onglets corrigés
+    st.write("### 🛒 Catalogue")
 
-    with tab_waste:
+    tab_mat, tab_waste, tab_stype, tab_load, tab_unload = st.tabs([
+        "📦 Matériaux",
+        "🗑️ Déchets (Bennes)",
+        "🏷️ Types de prestation",
+        "📍 Points de chargement",
+        "📍 Points de déchargement",
+    ])
+
+    def render_catalog_tab(category, tab_label):
+        """Rendu générique d'un onglet catalogue."""
         try:
-            df_waste_cat = load_data("SELECT id, name, unit, price_ht FROM catalog_items WHERE category='waste' ORDER BY name")
-            if df_waste_cat.empty:
-                st.info("Aucun type de déchet dans le catalogue.")
+            df_cat = load_data(
+                "SELECT id, name FROM catalog_items WHERE category=:cat ORDER BY name",
+                {"cat": category}
+            )
+            if df_cat.empty:
+                st.info(f"Aucun élément dans {tab_label}.")
             else:
-                st.dataframe(df_waste_cat.drop(columns=['id']), use_container_width=True)
-            if pin_ok:
-                with st.form("add_waste"):
-                    w_name = st.text_input("Type de déchet")
-                    w_unit = st.text_input("Unité")
-                    w_price = st.number_input("Prix HT", min_value=0.0, key="w_price")
-                    if st.form_submit_button("➕ Ajouter"):
-                        if w_name:
-                            run_query("INSERT INTO catalog_items (name, category, unit, price_ht) VALUES (:n, 'waste', :u, :p)", {"n": w_name, "u": w_unit, "p": w_price})
-                            st.success("Type de déchet ajouté !")
+                for _, cat_row in df_cat.iterrows():
+                    col_n, col_d = st.columns([4, 1])
+                    col_n.write(f"• {cat_row['name']}")
+                    if pin_ok:
+                        if col_d.button("🗑️", key=f"del_cat_{category}_{cat_row['id']}"):
+                            run_query("DELETE FROM catalog_items WHERE id=:id", {"id": cat_row['id']})
                             st.cache_data.clear()
                             st.rerun()
+            if pin_ok:
+                with st.form(f"add_{category}"):
+                    new_name = st.text_input(f"Nouveau ({tab_label})", key=f"inp_{category}")
+                    if st.form_submit_button("➕ Ajouter"):
+                        if new_name:
+                            try:
+                                run_query(
+                                    "INSERT INTO catalog_items (category, name) VALUES (:cat, :name) ON CONFLICT DO NOTHING",
+                                    {"cat": category, "name": new_name}
+                                )
+                                st.success(f"'{new_name}' ajouté !")
+                                st.cache_data.clear()
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erreur : {e}")
         except Exception as e:
-            st.error(f"Erreur : {e}")
+            st.error(f"Erreur catalogue {tab_label} : {e}")
+
+    with tab_mat:
+        render_catalog_tab("material", "Matériaux")
+    with tab_waste:
+        render_catalog_tab("waste", "Déchets")
+    with tab_stype:
+        # 6c. Types de prestation avec valeurs initiales
+        try:
+            run_query("""
+                INSERT INTO catalog_items (category, name)
+                VALUES ('service_type', 'Livraison de matériaux'),
+                       ('service_type', 'Location de benne')
+                ON CONFLICT DO NOTHING
+            """)
+        except Exception:
+            pass
+        render_catalog_tab("service_type", "Types de prestation")
+    with tab_load:
+        # 6d. Points de chargement
+        render_catalog_tab("loading_point", "Points de chargement")
+    with tab_unload:
+        # 6d. Points de déchargement
+        render_catalog_tab("unloading_point", "Points de déchargement")
 
     st.markdown("---")
     st.write("### 📅 Jours de fermeture de l'entreprise")
-    st.info("Module en construction 🚧 — Revenez prochainement.")
     try:
         df_closures_view = load_data("SELECT start_date, end_date, reason FROM company_closures ORDER BY start_date")
         if not df_closures_view.empty:
@@ -1295,8 +1836,8 @@ elif navigation == "⚙️ Paramètres de l'Entreprise":
             with st.form("add_closure"):
                 cc1, cc2 = st.columns(2)
                 with cc1:
-                    cl_start = st.date_input("Début de la fermeture")
-                    cl_end = st.date_input("Fin de la fermeture")
+                    cl_start = st.date_input("Début de la fermeture", format="DD/MM/YYYY")
+                    cl_end = st.date_input("Fin de la fermeture", format="DD/MM/YYYY")
                 with cc2:
                     cl_reason = st.text_input("Motif (ex: Congés annuels)")
                 if st.form_submit_button("📅 Ajouter la fermeture"):
