@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environnements virtuels
+.venv/
+venv/
+env/
+erp_env/
+
+# Uploads / photos chauffeurs (données privées)
+uploads/
+
+# Fichiers de sauvegarde
+*.bak
+*.bak.*
+
+# Scripts de fix one-shot (garder app.py propre)
+fix_*.py
+new_planning_block.py
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Variables d'environnement (si utilisé plus tard)
+.env
+.env.*
+
+# Streamlit cache local
+.streamlit/secrets.toml
