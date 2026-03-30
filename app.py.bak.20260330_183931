@@ -548,7 +548,7 @@ if navigation == "📊 Tableau de bord - Livraisons":
 
                 details = row['material'] or row['waste_type'] or ""
                 expander_label = (
-                    f"{color_badge} {row['client_name']} — "
+                    f"{color_badge} [{row['status'].upper()}] {row['client_name']} — "
                     f"{row['service_type']} — {details} "
                     f"({req_date.strftime('%d/%m/%Y') if req_date else '?'} / {row['requested_slot'] or '?'}) "
                     f"— {row['chauffeur'] or 'Non assigné'}"
@@ -568,36 +568,13 @@ if navigation == "📊 Tableau de bord - Livraisons":
                         )
                         slot_idx = SLOTS.index(row['requested_slot']) if row['requested_slot'] in SLOTS else 0
                         new_slot = st.selectbox("⏰ Créneau", SLOTS, index=slot_idx, key=f"slot_{order_id}")
-                        # Détection type pour champs fc1
-                        stype_edit = str(row['service_type'] or "").lower()
-                        is_benne_edit = any(x in stype_edit for x in [
-                            "benne", "pose", "retrait", "rotation", "enlèvement", "enlevement", "déplacement"
-                        ])
-                        if is_benne_edit:
-                            df_inv_e = load_data("SELECT size FROM skip_inventory ORDER BY size")
-                            inv_e_opts = df_inv_e['size'].tolist() if not df_inv_e.empty else []
-                            curr_cont = str(row['container_type'] or "")
-                            if inv_e_opts:
-                                cont_idx = inv_e_opts.index(curr_cont) if curr_cont in inv_e_opts else 0
-                                new_container = st.selectbox("📦 Taille de benne", inv_e_opts, index=cont_idx, key=f"cont_{order_id}")
-                            else:
-                                new_container = st.text_input("📦 Taille de benne", value=curr_cont, key=f"cont_{order_id}")
-                            new_qty = float(row['quantity_tons'] or 0)
-                        else:
-                            new_container = str(row['container_type'] or "")
-                            new_qty = st.number_input("⚖️ Quantité (tonnes)", value=float(row['quantity_tons'] or 0), min_value=0.0, step=0.5, key=f"qty_{order_id}")
+                        new_qty = st.number_input("⚖️ Quantité (tonnes)", value=float(row['quantity_tons'] or 0), min_value=0.0, step=0.5, key=f"qty_{order_id}")
                     with fc2:
                         # Material ou waste_type selon service_type
-                        if is_benne_edit:
+                        stype = str(row['service_type'] or "").lower()
+                        if "benne" in stype:
                             new_material = None
-                            df_waste_opts = load_data("SELECT name FROM catalog_items WHERE category='waste' ORDER BY name")
-                            waste_opts = df_waste_opts['name'].tolist() if not df_waste_opts.empty else []
-                            curr_waste = row['waste_type'] or ""
-                            if waste_opts:
-                                waste_idx = waste_opts.index(curr_waste) if curr_waste in waste_opts else 0
-                                new_waste = st.selectbox("🗑️ Type de déchet", waste_opts, index=waste_idx, key=f"waste_{order_id}")
-                            else:
-                                new_waste = st.text_input("🗑️ Type de déchet", value=curr_waste, key=f"waste_{order_id}")
+                            new_waste = st.text_input("🗑️ Type de déchet", value=row['waste_type'] or "", key=f"waste_{order_id}")
                             # Point de déchargement
                             unload_val = row['unloading_point'] or ""
                             unload_idx = unloading_options.index(unload_val) if unload_val in unloading_options else 0
@@ -608,16 +585,7 @@ if navigation == "📊 Tableau de bord - Livraisons":
                             new_load = row['loading_point'] or ""
                         else:
                             new_waste = None
-                            df_mat_opts = load_data("SELECT name FROM catalog_items WHERE category='material' ORDER BY name")
-                            mat_opts = df_mat_opts['name'].tolist() if not df_mat_opts.empty else []
-                            if "Big Bag" not in mat_opts:
-                                mat_opts = mat_opts + ["Big Bag"]
-                            curr_mat = row['material'] or ""
-                            if mat_opts:
-                                mat_idx = mat_opts.index(curr_mat) if curr_mat in mat_opts else 0
-                                new_material = st.selectbox("📦 Matériau", mat_opts, index=mat_idx, key=f"mat_{order_id}")
-                            else:
-                                new_material = st.text_input("📦 Matériau", value=curr_mat, key=f"mat_{order_id}")
+                            new_material = st.text_input("📦 Matériau", value=row['material'] or "", key=f"mat_{order_id}")
                             # Point de chargement
                             load_val = row['loading_point'] or ""
                             load_idx = loading_options.index(load_val) if load_val in loading_options else 0
@@ -640,12 +608,12 @@ if navigation == "📊 Tableau de bord - Livraisons":
                                     requested_date=:rd, requested_slot=:rs, quantity_tons=:qty,
                                     material=:mat, waste_type=:waste, driver_id=:did,
                                     loading_point=:lp, unloading_point=:up,
-                                    container_type=:ct
+                                    updated_at=NOW()
                                 WHERE id=:id
                             """, {
                                 "rd": new_date, "rs": new_slot, "qty": new_qty,
                                 "mat": new_material, "waste": new_waste, "did": new_driver,
-                                "lp": new_load, "up": new_unload, "ct": new_container, "id": order_id
+                                "lp": new_load, "up": new_unload, "id": order_id
                             })
                             st.success("✅ Commande mise à jour.")
                             st.cache_data.clear()
@@ -1092,7 +1060,7 @@ elif navigation == "📅 Planning & Assignation":
                 st.write("#### 🔴 Non assignées")
                 for _, row in unassigned.iterrows():
                     checked = st.checkbox(
-                        f"{row['client']} — {row['service_type']} — {row['details']} ({row['requested_slot']})",
+                        f"[{row['status'].upper()}] {row['client']} — {row['service_type']} — {row['details']} ({row['requested_slot']})",
                         key=f"chk_{row['id']}"
                     )
                     if checked:
@@ -1106,7 +1074,7 @@ elif navigation == "📅 Planning & Assignation":
                     with st.expander(f"👤 {driver_name} ({len(group)} mission(s))"):
                         for _, row in group.iterrows():
                             checked = st.checkbox(
-                                f"{row['client']} — {row['service_type']} — {row['details']} ({row['requested_slot']})",
+                                f"[{row['status'].upper()}] {row['client']} — {row['service_type']} — {row['details']} ({row['requested_slot']})",
                                 key=f"chk_{row['id']}"
                             )
                             if checked:
@@ -1556,10 +1524,8 @@ elif navigation == "📱 Vue Chauffeur (Mobile)":
         else:
             for _, m in df_missions.iterrows():
                 stype = str(m['service_type'] or "").lower()
-                is_benne_mission = any(x in stype for x in [
-                    "benne", "pose", "retrait", "rotation", "enlèvement", "enlevement", "déplacement"
-                ])
-                is_rotation_enlev = any(x in stype for x in ["rotation", "enlèvement", "enlevement", "déplacement", "retrait"])
+                is_benne_mission = "benne" in stype
+                is_rotation_enlev = any(x in stype for x in ["rotation", "enlèvement", "enlevement", "déplacement"])
 
                 mission_label = f"📦 {m['client_name']} — {m['service_type']} ({m['requested_slot'] or '?'})"
                 with st.expander(mission_label):
@@ -1603,13 +1569,10 @@ elif navigation == "📱 Vue Chauffeur (Mobile)":
                             st.cache_data.clear()
                             st.rerun()
                     with col_m2:
-                        # 5c. Signalement problème (bouton toggle - sans expander imbriqué)
-                        toggle_key = f"show_issue_{m['id']}"
-                        if st.button(L['report_issue'], key=f"btn_issue_{m['id']}", use_container_width=True):
-                            st.session_state[toggle_key] = not st.session_state.get(toggle_key, False)
-                        if st.session_state.get(toggle_key, False):
+                        # 5c. Signalement problème livraison avec photo
+                        with st.expander(L['report_issue']):
                             with st.form(f"mission_issue_{m['id']}"):
-                                issue_desc = st.text_area(L['issue_desc'])
+                                issue_desc = st.text_area("Décrivez le problème")
                                 issue_photo_cam = st.camera_input("📸 Prendre une photo")
                                 issue_photo_file = st.file_uploader("📎 Ou importer", type=["jpg", "jpeg", "png"], key=f"ph_{m['id']}")
                                 if st.form_submit_button(L['send_alert'], type="primary", use_container_width=True):
@@ -1627,7 +1590,6 @@ elif navigation == "📱 Vue Chauffeur (Mobile)":
                                             "INSERT INTO order_issues (order_id, driver_id, description, photo_data) VALUES (:oid, :did, :desc, :pic)",
                                             {"oid": m['id'], "did": chauffeur_id, "desc": issue_desc, "pic": pic_path}
                                         )
-                                        st.session_state[toggle_key] = False
                                         st.success("🚨 Alerte envoyée au bureau !")
                                     else:
                                         st.error("La description est obligatoire.")
@@ -1656,6 +1618,7 @@ elif navigation == "♻️ Centre de Tri":
 
                 with col_info:
                     st.write(f"**{bin_row['bin_type']}** ({bin_row['container_size']}) — {status_label}")
+                    st.progress(fill_ratio, text=f"{bin_row['bin_type']} — {int(fill_ratio * 100)}%")
                     if bin_row['notes']:
                         st.caption(f"Note : {bin_row['notes']}")
 
