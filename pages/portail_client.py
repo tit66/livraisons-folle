@@ -11,7 +11,8 @@ st.set_page_config(
     layout="centered",
 )
 
-DB_URI = 'postgresql://n8n:supersecret@n8n-local_postgres_1:5432/n8n'
+import os as _os
+DB_URI = _os.environ.get('DATABASE_URL', 'postgresql://n8n:supersecret@postgres:5432/n8n')
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONNEXION BDD

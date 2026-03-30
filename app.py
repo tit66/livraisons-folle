@@ -14,7 +14,8 @@ from streamlit_folium import st_folium
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(page_title='Livraisons Folles', page_icon='🐙', layout='wide')
 
-DB_URI = 'postgresql://n8n:supersecret@n8n-local_postgres_1:5432/n8n'
+import os as _os
+DB_URI = _os.environ.get('DATABASE_URL', 'postgresql://n8n:supersecret@postgres:5432/n8n')
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MULTILINGUE - VUE CHAUFFEUR

@@ -1,0 +1,10 @@
+# Site de présentation
+livraisons-folles.fr, www.livraisons-folles.fr {
+    root * /srv/site
+    file_server
+}
+
+# Application Streamlit
+app.livraisons-folles.fr {
+    reverse_proxy streamlit:8501
+}

@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: livraisons_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: n8n
+      POSTGRES_PASSWORD: supersecret
+      POSTGRES_DB: n8n
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+
+  streamlit:
+    build: .
+    container_name: livraisons_streamlit
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    volumes:
+      - .:/app
+      - uploads_data:/app/uploads
+    networks:
+      - internal
+      - web
+    expose:
+      - "8501"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: livraisons_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - /opt/livraisons/site:/srv/site
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - internal
+      - web
+
+volumes:
+  postgres_data:
+  uploads_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+  web:
