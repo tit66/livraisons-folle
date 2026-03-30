@@ -430,25 +430,111 @@ SLOTS = ["Indifférent dans la journée", "8h Premier tour", "8h-10h", "10h-12h"
 auto_report_orders()
 
 # ─────────────────────────────────────────────────────────────────────────────
+# AUTHENTIFICATION
+# ─────────────────────────────────────────────────────────────────────────────
+import hashlib as _hashlib
+
+def _hash_pw(pw: str) -> str:
+    return _hashlib.sha256(pw.encode()).hexdigest()
+
+def _check_pw(pw: str, stored: str) -> bool:
+    return _hash_pw(pw) == stored
+
+# Initialiser session
+if "auth_role" not in st.session_state:
+    st.session_state.auth_role = None   # "admin" | "driver"
+if "auth_driver_id" not in st.session_state:
+    st.session_state.auth_driver_id = None
+if "auth_name" not in st.session_state:
+    st.session_state.auth_name = None
+
+def show_login():
+    st.markdown("""
+    <style>
+    .login-box { max-width: 420px; margin: 4rem auto; }
+    </style>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="login-box">', unsafe_allow_html=True)
+    st.markdown("### 🔐 Connexion — Livraisons Folles")
+    with st.form("main_login_form"):
+        email = st.text_input("Email")
+        password = st.text_input("Mot de passe", type="password")
+        submitted = st.form_submit_button("Se connecter", type="primary", use_container_width=True)
+        if submitted:
+            if not email or not password:
+                st.error("Email et mot de passe requis.")
+            else:
+                authenticated = False
+                # ── Vérifier admin ──
+                try:
+                    df_settings = load_data("SELECT key, value FROM system_settings WHERE key IN ('admin_email', 'admin_password_hash')")
+                    settings = dict(zip(df_settings["key"], df_settings["value"]))
+                    if (email.lower() == settings.get("admin_email", "").lower()
+                            and _check_pw(password, settings.get("admin_password_hash", ""))):
+                        st.session_state.auth_role = "admin"
+                        st.session_state.auth_name = "Admin"
+                        authenticated = True
+                except Exception:
+                    pass
+                # ── Vérifier chauffeur ──
+                if not authenticated:
+                    try:
+                        df_drv = load_data(
+                            "SELECT id, first_name, last_name, password_hash FROM drivers WHERE LOWER(email)=LOWER(:email) AND is_active=true",
+                            {"email": email}
+                        )
+                        if not df_drv.empty:
+                            r = df_drv.iloc[0]
+                            if r["password_hash"] and _check_pw(password, r["password_hash"]):
+                                st.session_state.auth_role = "driver"
+                                st.session_state.auth_driver_id = r["id"]
+                                st.session_state.auth_name = f"{r['first_name']} {r['last_name']}"
+                                authenticated = True
+                    except Exception:
+                        pass
+                if not authenticated:
+                    st.error("Email ou mot de passe incorrect.")
+                else:
+                    st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# ── Vérifier si connecté ──
+if not st.session_state.auth_role:
+    show_login()
+    st.stop()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # SIDEBAR NAVIGATION
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("🐙 Livraisons Folles")
     st.markdown("---")
-    navigation = st.sidebar.radio(
-        "Navigation",
-        [
-            "📊 Tableau de bord - Livraisons",
-            "➕ Prise de Commande",
-            "📅 Planning & Assignation",
-            "📍 Suivi du Parc de Bennes",
-            "👥 Gestion des Chauffeurs",
-            "🚚 Gestion de la Flotte",
-            "📱 Vue Chauffeur (Mobile)",
-            "♻️ Centre de Tri",
-            "⚙️ Paramètres de l'Entreprise",
-        ]
-    )
+    st.write(f"👤 **{st.session_state.auth_name}**")
+    if st.button("🚪 Déconnexion", use_container_width=True):
+        st.session_state.auth_role = None
+        st.session_state.auth_driver_id = None
+        st.session_state.auth_name = None
+        st.rerun()
+    st.markdown("---")
+    if st.session_state.auth_role == "admin":
+        navigation = st.sidebar.radio(
+            "Navigation",
+            [
+                "📊 Tableau de bord - Livraisons",
+                "➕ Prise de Commande",
+                "📅 Planning & Assignation",
+                "📍 Suivi du Parc de Bennes",
+                "👥 Gestion des Chauffeurs",
+                "🚚 Gestion de la Flotte",
+                "📱 Vue Chauffeur (Mobile)",
+                "♻️ Centre de Tri",
+                "⚙️ Paramètres de l'Entreprise",
+            ]
+        )
+    else:
+        navigation = "📱 Vue Chauffeur (Mobile)"
+        st.info("🚚 Vue Chauffeur")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE: TABLEAU DE BORD
@@ -599,10 +685,14 @@ if navigation == "📊 Tableau de bord - Livraisons":
                             else:
                                 new_waste = st.text_input("🗑️ Type de déchet", value=curr_waste, key=f"waste_{order_id}")
                             # Point de déchargement
+                            df_unload_opts2 = load_data("SELECT name FROM catalog_items WHERE category='unloading_point' ORDER BY name")
+                            unload_list = df_unload_opts2['name'].tolist() if not df_unload_opts2.empty else []
                             unload_val = row['unloading_point'] or ""
-                            unload_idx = unloading_options.index(unload_val) if unload_val in unloading_options else 0
-                            if unloading_options:
-                                new_unload = st.selectbox("📍 Point de déchargement", unloading_options, index=unload_idx, key=f"unload_{order_id}")
+                            if unload_val and unload_val not in unload_list:
+                                unload_list = [unload_val] + unload_list
+                            unload_idx = unload_list.index(unload_val) if unload_val in unload_list else 0
+                            if unload_list:
+                                new_unload = st.selectbox("📍 Point de déchargement", unload_list, index=unload_idx, key=f"unload_{order_id}")
                             else:
                                 new_unload = st.text_input("📍 Point de déchargement", value=unload_val, key=f"unload_{order_id}")
                             new_load = row['loading_point'] or ""
@@ -619,10 +709,14 @@ if navigation == "📊 Tableau de bord - Livraisons":
                             else:
                                 new_material = st.text_input("📦 Matériau", value=curr_mat, key=f"mat_{order_id}")
                             # Point de chargement
+                            df_load_opts2 = load_data("SELECT name FROM catalog_items WHERE category='loading_point' ORDER BY name")
+                            load_list = df_load_opts2['name'].tolist() if not df_load_opts2.empty else []
                             load_val = row['loading_point'] or ""
-                            load_idx = loading_options.index(load_val) if load_val in loading_options else 0
-                            if loading_options:
-                                new_load = st.selectbox("📍 Lieu de chargement", loading_options, index=load_idx, key=f"load_{order_id}")
+                            if load_val and load_val not in load_list:
+                                load_list = [load_val] + load_list
+                            load_idx = load_list.index(load_val) if load_val in load_list else 0
+                            if load_list:
+                                new_load = st.selectbox("📍 Lieu de chargement", load_list, index=load_idx, key=f"load_{order_id}")
                             else:
                                 new_load = st.text_input("📍 Lieu de chargement", value=load_val, key=f"load_{order_id}")
                             new_unload = row['unloading_point'] or ""
@@ -1054,6 +1148,7 @@ elif navigation == "📅 Planning & Assignation":
                    COALESCE(o.material, o.waste_type) as details,
                    s.address, o.status,
                    o.driver_id,
+                   COALESCE(o.delivery_order, 0) as delivery_order,
                    CONCAT(d.first_name, ' ', d.last_name) as chauffeur,
                    v.license_plate as vehicule
             FROM orders o
@@ -1062,7 +1157,7 @@ elif navigation == "📅 Planning & Assignation":
             LEFT JOIN drivers d ON o.driver_id = d.id
             LEFT JOIN vehicles v ON o.vehicle_id = v.id
             WHERE o.requested_date = :d AND o.status IN ('pending', 'planned', 'dispatched')
-            ORDER BY o.driver_id NULLS FIRST, o.id
+            ORDER BY o.driver_id NULLS FIRST, COALESCE(o.delivery_order, 0), o.id
         """, {"d": date_planning})
 
         df_drivers_sel = load_data("SELECT id, first_name, last_name FROM drivers WHERE is_active = true")
@@ -1070,48 +1165,102 @@ elif navigation == "📅 Planning & Assignation":
 
         drv_dict = {None: "--- Choisir un chauffeur ---"}
         for _, r in df_drivers_sel.iterrows():
-            drv_dict[r['id']] = f"{r['first_name']} {r['last_name']}"
+            drv_dict[r["id"]] = f"{r['first_name']} {r['last_name']}"
 
         veh_dict_sel = {None: "--- Choisir un véhicule ---"}
         trailer_dict = {None: "Aucune remorque"}
         for _, r in df_vehicles_sel.iterrows():
             label = f"{r['license_plate']} ({r['type']}) {r['name'] or ''}"
-            veh_dict_sel[r['id']] = label
-            trailer_dict[r['id']] = label
+            veh_dict_sel[r["id"]] = label
+            trailer_dict[r["id"]] = label
 
         selected_order_ids = []
         if df_plan.empty:
             st.info("Aucune commande à planifier pour cette date.")
         else:
-            # 3b. Tableau groupé par chauffeur
-            unassigned = df_plan[df_plan['driver_id'].isna()]
-            assigned = df_plan[df_plan['driver_id'].notna()]
+            unassigned = df_plan[df_plan["driver_id"].isna()]
+            assigned = df_plan[df_plan["driver_id"].notna()]
 
-            # Commandes non assignées
+            # ── Commandes non assignées ──
             if not unassigned.empty:
                 st.write("#### 🔴 Non assignées")
                 for _, row in unassigned.iterrows():
-                    checked = st.checkbox(
-                        f"{row['client']} — {row['service_type']} — {row['details']} ({row['requested_slot']})",
-                        key=f"chk_{row['id']}"
-                    )
+                    c_chk, c_info = st.columns([0.5, 9.5])
+                    with c_chk:
+                        checked = st.checkbox("", key=f"chk_{row['id']}", label_visibility="collapsed")
+                    with c_info:
+                        st.write(f"**{row['client']}** — {row['service_type']} — {row['details'] or ''} ({row['requested_slot'] or '?'})")
                     if checked:
-                        selected_order_ids.append(row['id'])
+                        selected_order_ids.append(row["id"])
 
-            # Grouper par chauffeur
+            # ── Grouper par chauffeur ──
             if not assigned.empty:
-                grouped_drivers = assigned.groupby('driver_id')
+                grouped_drivers = assigned.groupby("driver_id")
                 for driver_id, group in grouped_drivers:
-                    driver_name = group.iloc[0]['chauffeur'] or f"Chauffeur #{driver_id}"
-                    with st.expander(f"👤 {driver_name} ({len(group)} mission(s))"):
-                        for _, row in group.iterrows():
-                            checked = st.checkbox(
-                                f"{row['client']} — {row['service_type']} — {row['details']} ({row['requested_slot']})",
-                                key=f"chk_{row['id']}"
-                            )
+                    group = group.sort_values("delivery_order")
+                    driver_name = group.iloc[0]["chauffeur"] or f"Chauffeur #{driver_id}"
+                    with st.expander(f"👤 {driver_name} — {len(group)} mission(s)", expanded=True):
+                        for pos, (_, row) in enumerate(group.iterrows()):
+                            order_ids_list = group["id"].tolist()
+                            c_num, c_chk, c_label, c_up, c_dn, c_reassign, c_unassign = st.columns([0.5, 0.5, 6, 0.5, 0.5, 1.5, 1.5])
+                            with c_num:
+                                st.markdown(f"**#{pos+1}**")
+                            with c_chk:
+                                checked = st.checkbox("", key=f"chk_{row['id']}", label_visibility="collapsed")
+                            with c_label:
+                                st.write(f"**{row['client']}** — {row['service_type']} — {row['details'] or ''} ({row['requested_slot'] or '?'})")
+                            # Bouton monter
+                            with c_up:
+                                if pos > 0:
+                                    if st.button("⬆️", key=f"up_{row['id']}", help="Monter dans la tournée"):
+                                        prev_id = order_ids_list[pos - 1]
+                                        run_query("UPDATE orders SET delivery_order=:o WHERE id=:id", {"o": pos - 1, "id": row["id"]})
+                                        run_query("UPDATE orders SET delivery_order=:o WHERE id=:id", {"o": pos, "id": prev_id})
+                                        st.cache_data.clear()
+                                        st.rerun()
+                            # Bouton descendre
+                            with c_dn:
+                                if pos < len(group) - 1:
+                                    if st.button("⬇️", key=f"dn_{row['id']}", help="Descendre dans la tournée"):
+                                        next_id = order_ids_list[pos + 1]
+                                        run_query("UPDATE orders SET delivery_order=:o WHERE id=:id", {"o": pos + 1, "id": row["id"]})
+                                        run_query("UPDATE orders SET delivery_order=:o WHERE id=:id", {"o": pos, "id": next_id})
+                                        st.cache_data.clear()
+                                        st.rerun()
+                            # Réassigner à un autre chauffeur
+                            with c_reassign:
+                                other_drivers = {k: v for k, v in drv_dict.items() if k != driver_id and k is not None}
+                                if other_drivers:
+                                    reassign_target = st.selectbox(
+                                        "↪️ Réassigner",
+                                        options=[None] + list(other_drivers.keys()),
+                                        format_func=lambda x: "↪️ Réassigner..." if x is None else other_drivers.get(x, ""),
+                                        key=f"reassign_sel_{row['id']}",
+                                        label_visibility="collapsed"
+                                    )
+                                    if reassign_target is not None:
+                                        # Compter les missions du nouveau chauffeur ce jour-là
+                                        df_new_drv = df_plan[df_plan["driver_id"] == reassign_target]
+                                        new_order = len(df_new_drv)
+                                        run_query(
+                                            "UPDATE orders SET driver_id=:did, delivery_order=:o WHERE id=:id",
+                                            {"did": reassign_target, "o": new_order, "id": row["id"]}
+                                        )
+                                        st.cache_data.clear()
+                                        st.rerun()
+                            # Remettre en attente
+                            with c_unassign:
+                                if st.button("🔄 Attente", key=f"unassign_{row['id']}", help="Désassigner et remettre en attente"):
+                                    run_query(
+                                        "UPDATE orders SET status='pending', driver_id=NULL, vehicle_id=NULL, trailer_id=NULL, delivery_order=0 WHERE id=:id",
+                                        {"id": row["id"]}
+                                    )
+                                    st.cache_data.clear()
+                                    st.rerun()
                             if checked:
-                                selected_order_ids.append(row['id'])
+                                selected_order_ids.append(row["id"])
 
+        st.markdown("---")
         st.write("### 2️⃣ Assigner les ressources à la sélection")
         c_as1, c_as2, c_as3 = st.columns(3)
         with c_as1:
@@ -1125,11 +1274,14 @@ elif navigation == "📅 Planning & Assignation":
             if not selected_order_ids:
                 st.warning("Aucune commande sélectionnée.")
             else:
-                for oid in selected_order_ids:
+                # Calculer le delivery_order de départ pour ce chauffeur
+                df_existing = df_plan[df_plan["driver_id"] == assign_driver] if assign_driver else pd.DataFrame()
+                start_order = len(df_existing)
+                for i_ord, oid in enumerate(selected_order_ids):
                     run_query("""
-                        UPDATE orders SET status='planned', driver_id=:did, vehicle_id=:vid, trailer_id=:tid
+                        UPDATE orders SET status='planned', driver_id=:did, vehicle_id=:vid, trailer_id=:tid, delivery_order=:o
                         WHERE id=:oid
-                    """, {"did": assign_driver, "vid": assign_vehicle, "tid": assign_trailer, "oid": oid})
+                    """, {"did": assign_driver, "vid": assign_vehicle, "tid": assign_trailer, "o": start_order + i_ord, "oid": oid})
                 st.success(f"✅ {len(selected_order_ids)} commande(s) assignée(s).")
                 st.cache_data.clear()
                 st.rerun()
@@ -1210,8 +1362,10 @@ elif navigation == "👥 Gestion des Chauffeurs":
                 d_nom = st.text_input("Nom *")
                 d_nationality = st.text_input("Nationalité", value="Français")
                 d_tel = st.text_input("Téléphone")
-                d_email = st.text_input("Email")
+                d_email = st.text_input("Email (utilisé pour la connexion)")
                 d_whatsapp = st.text_input("WhatsApp (ex: +336...)")
+                d_password = st.text_input("Mot de passe app chauffeur", type="password")
+                d_password2 = st.text_input("Confirmer le mot de passe", type="password")
                 d_notes = st.text_area("Période d'absence (ex: Congés du 12 au 20 Août)")
             with c_d2:
                 d_permis = st.text_input("N° de Permis de Conduire")
@@ -1232,17 +1386,28 @@ elif navigation == "👥 Gestion des Chauffeurs":
                         notes_final = d_notes or ""
                         if d_whatsapp:
                             notes_final = f"WA:{d_whatsapp}\n{notes_final}".strip()
-                        run_query("""
-                            INSERT INTO drivers (first_name, last_name, phone, email, nationality,
-                                license_expiry, fimo_fco_expiry, driver_card_number, driver_card_expiry,
-                                caces_expiry, notes, is_active)
-                            VALUES (:fn, :ln, :ph, :em, :nat, :le, :fimo, :dcn, :dce, :ce, :notes, true)
-                        """, {
-                            "fn": d_prenom, "ln": d_nom, "ph": d_tel, "em": d_email,
-                            "nat": d_nationality, "le": None, "fimo": d_fimo_exp,
-                            "dcn": d_carte_num, "dce": d_carte_exp, "ce": d_caces_exp,
-                            "notes": notes_final
-                        })
+                        import hashlib as _hl
+                        pw_errors = []
+                        if d_password and d_password != d_password2:
+                            pw_errors.append("Les mots de passe ne correspondent pas.")
+                        if d_password and len(d_password) < 6:
+                            pw_errors.append("Mot de passe trop court (6 caractères min).")
+                        if pw_errors:
+                            for pe in pw_errors:
+                                st.error(pe)
+                        else:
+                            drv_pw_hash = _hl.sha256(d_password.encode()).hexdigest() if d_password else None
+                            run_query("""
+                                INSERT INTO drivers (first_name, last_name, phone, email, nationality,
+                                    license_expiry, fimo_fco_expiry, driver_card_number, driver_card_expiry,
+                                    caces_expiry, notes, is_active, password_hash)
+                                VALUES (:fn, :ln, :ph, :em, :nat, :le, :fimo, :dcn, :dce, :ce, :notes, true, :pw)
+                            """, {
+                                "fn": d_prenom, "ln": d_nom, "ph": d_tel, "em": d_email,
+                                "nat": d_nationality, "le": None, "fimo": d_fimo_exp,
+                                "dcn": d_carte_num, "dce": d_carte_exp, "ce": d_caces_exp,
+                                "notes": notes_final, "pw": drv_pw_hash
+                            })
                         st.success(f"✅ Chauffeur {d_prenom} {d_nom} ajouté !")
                         st.cache_data.clear()
                         st.rerun()
@@ -1295,6 +1460,9 @@ elif navigation == "👥 Gestion des Chauffeurs":
                         e_email = st.text_input("Email", value=r['email'] or "")
                         e_whatsapp = st.text_input("WhatsApp", value=wa_val)
                         e_notes = st.text_area("Absences", value=notes_display)
+                        st.markdown("**Nouveau mot de passe** (laisser vide pour ne pas changer)")
+                        e_pw = st.text_input("Nouveau mot de passe", type="password", key="edit_drv_pw")
+                        e_pw2 = st.text_input("Confirmer", type="password", key="edit_drv_pw2")
                     with ec2:
                         e_fimo = st.date_input("Validité FIMO/FCO", value=r['fimo_fco_expiry'] if pd.notna(r['fimo_fco_expiry']) else datetime.date.today(), format="DD/MM/YYYY")
                         e_dcnum = st.text_input("N° Carte Conducteur", value=r['driver_card_number'] or "")
@@ -1307,20 +1475,41 @@ elif navigation == "👥 Gestion des Chauffeurs":
                         new_notes = e_notes or ""
                         if e_whatsapp:
                             new_notes = f"WA:{e_whatsapp}\n{new_notes}".strip()
-                        run_query("""
-                            UPDATE drivers SET first_name=:fn, last_name=:ln, phone=:ph, email=:em,
-                                nationality=:nat, fimo_fco_expiry=:fimo, driver_card_number=:dcn,
-                                driver_card_expiry=:dce, caces_expiry=:ce, notes=:notes, is_active=:active
-                            WHERE id=:id
-                        """, {
-                            "fn": e_prenom, "ln": e_nom, "ph": e_tel, "em": e_email,
-                            "nat": e_nationality, "fimo": e_fimo, "dcn": e_dcnum,
-                            "dce": e_dcexp, "ce": e_caces, "notes": new_notes,
-                            "active": e_active, "id": edit_drv_id
-                        })
-                        st.success("✅ Chauffeur mis à jour.")
-                        st.cache_data.clear()
-                        st.rerun()
+                        import hashlib as _hl2
+                        if e_pw and e_pw != e_pw2:
+                            st.error("Les mots de passe ne correspondent pas.")
+                        elif e_pw and len(e_pw) < 6:
+                            st.error("Mot de passe trop court (6 caractères min).")
+                        else:
+                            new_pw_hash = _hl2.sha256(e_pw.encode()).hexdigest() if e_pw else None
+                            if new_pw_hash:
+                                run_query("""
+                                    UPDATE drivers SET first_name=:fn, last_name=:ln, phone=:ph, email=:em,
+                                        nationality=:nat, fimo_fco_expiry=:fimo, driver_card_number=:dcn,
+                                        driver_card_expiry=:dce, caces_expiry=:ce, notes=:notes, is_active=:active,
+                                        password_hash=:pw
+                                    WHERE id=:id
+                                """, {
+                                    "fn": e_prenom, "ln": e_nom, "ph": e_tel, "em": e_email,
+                                    "nat": e_nationality, "fimo": e_fimo, "dcn": e_dcnum,
+                                    "dce": e_dcexp, "ce": e_caces, "notes": new_notes,
+                                    "active": e_active, "pw": new_pw_hash, "id": edit_drv_id
+                                })
+                            else:
+                                run_query("""
+                                    UPDATE drivers SET first_name=:fn, last_name=:ln, phone=:ph, email=:em,
+                                        nationality=:nat, fimo_fco_expiry=:fimo, driver_card_number=:dcn,
+                                        driver_card_expiry=:dce, caces_expiry=:ce, notes=:notes, is_active=:active
+                                    WHERE id=:id
+                                """, {
+                                    "fn": e_prenom, "ln": e_nom, "ph": e_tel, "em": e_email,
+                                    "nat": e_nationality, "fimo": e_fimo, "dcn": e_dcnum,
+                                    "dce": e_dcexp, "ce": e_caces, "notes": new_notes,
+                                    "active": e_active, "id": edit_drv_id
+                                })
+                            st.success("✅ Chauffeur mis à jour.")
+                            st.cache_data.clear()
+                            st.rerun()
     except Exception as e:
         st.error(f"Erreur : {e}")
 
@@ -1465,8 +1654,13 @@ elif navigation == "📱 Vue Chauffeur (Mobile)":
             st.stop()
 
         drv_mobile_dict = dict(zip(df_drv_mobile['id'], df_drv_mobile['first_name'] + " " + df_drv_mobile['last_name']))
-        chauffeur_id = st.selectbox("Se connecter en tant que :", options=list(drv_mobile_dict.keys()),
-                                     format_func=lambda x: drv_mobile_dict[x])
+        # Si connecté en tant que chauffeur, pré-sélectionner et verrouiller
+        if st.session_state.auth_role == "driver":
+            chauffeur_id = st.session_state.auth_driver_id
+            st.info(f"🚚 Connecté : **{drv_mobile_dict.get(chauffeur_id, chauffeur_id)}**")
+        else:
+            chauffeur_id = st.selectbox("Se connecter en tant que :", options=list(drv_mobile_dict.keys()),
+                                         format_func=lambda x: drv_mobile_dict[x])
 
         # Détecter langue selon nationalité
         drv_row = df_drv_mobile[df_drv_mobile['id'] == chauffeur_id].iloc[0]
@@ -1548,7 +1742,7 @@ elif navigation == "📱 Vue Chauffeur (Mobile)":
             LEFT JOIN clients c ON o.client_id = c.id
             LEFT JOIN sites s ON o.site_id = s.id
             WHERE o.driver_id = :did AND o.requested_date = :d
-            ORDER BY o.id
+            ORDER BY COALESCE(o.delivery_order, 0), o.id
         """, {"did": chauffeur_id, "d": today_mobile})
 
         if df_missions.empty:
@@ -1862,6 +2056,36 @@ elif navigation == "⚙️ Paramètres de l'Entreprise":
     with tab_unload:
         # 6d. Points de déchargement
         render_catalog_tab("unloading_point", "Points de déchargement")
+
+    st.markdown("---")
+    st.write("### 🔐 Identifiants Admin")
+    if pin_ok:
+        with st.form("admin_credentials_form"):
+            df_creds = load_data("SELECT key, value FROM system_settings WHERE key IN ('admin_email','admin_password_hash')")
+            creds = dict(zip(df_creds["key"], df_creds["value"])) if not df_creds.empty else {}
+            ca1, ca2 = st.columns(2)
+            with ca1:
+                new_admin_email = st.text_input("Email admin", value=creds.get("admin_email", ""))
+            with ca2:
+                new_admin_pw = st.text_input("Nouveau mot de passe admin", type="password")
+                new_admin_pw2 = st.text_input("Confirmer", type="password")
+            if st.form_submit_button("💾 Mettre à jour les identifiants admin", type="primary"):
+                import hashlib as _hla
+                errors_cred = []
+                if new_admin_pw and new_admin_pw != new_admin_pw2:
+                    errors_cred.append("Les mots de passe ne correspondent pas.")
+                if new_admin_pw and len(new_admin_pw) < 6:
+                    errors_cred.append("Mot de passe trop court.")
+                if errors_cred:
+                    for ec in errors_cred:
+                        st.error(ec)
+                else:
+                    if new_admin_email:
+                        run_query("INSERT INTO system_settings (key,value) VALUES ('admin_email',:v) ON CONFLICT (key) DO UPDATE SET value=:v", {"v": new_admin_email})
+                    if new_admin_pw:
+                        run_query("INSERT INTO system_settings (key,value) VALUES ('admin_password_hash',:v) ON CONFLICT (key) DO UPDATE SET value=:v", {"v": _hla.sha256(new_admin_pw.encode()).hexdigest()})
+                    st.success("✅ Identifiants admin mis à jour.")
+                    st.cache_data.clear()
 
     st.markdown("---")
     st.write("### 📅 Jours de fermeture de l'entreprise")

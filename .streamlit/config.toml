@@ -1,9 +1,9 @@
 [theme]
-# Thème "Travaux Publics / Recyclage"
-primaryColor = "#E65100"  # Orange vif pour les boutons et actions (type BTP)
-backgroundColor = "#F8F9FA"  # Fond gris très clair (moins agressif que le blanc pur)
-secondaryBackgroundColor = "#E9ECEF" # Gris un peu plus foncé pour la barre latérale
-textColor = "#212529" # Texte sombre pour le contraste (lumière du jour)
+# Thème "Livraisons Folles" — Jaune vif
+primaryColor = "#F9A800"
+backgroundColor = "#F8F9FA"
+secondaryBackgroundColor = "#E9ECEF"
+textColor = "#212529"
 font = "sans serif"
 
 [server]
